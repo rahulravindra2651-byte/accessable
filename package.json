@@ -4,16 +4,16 @@
   "description": "AccessAble — Real-Time Indian Sign Language & Voice Assistive Platform",
   "main": "backend/server.js",
   "scripts": {
-    "install:all": "npm install && cd backend && npm install",
+    "install:all": "npm install --legacy-peer-deps && cd backend && npm install",
     "build": "react-scripts build",
     "start": "node backend/server.js",
     "dev:backend": "cd backend && npm start",
     "dev:frontend": "react-scripts start"
   },
   "dependencies": {
-    "@mediapipe/camera_utils": "^0.4.1675466862",
-    "@mediapipe/drawing_utils": "^0.3.1675466124",
-    "@mediapipe/hands": "^0.4.1675469240",
+    "@mediapipe/camera_utils": "0.4.1675466862",
+    "@mediapipe/drawing_utils": "0.3.1675466124",
+    "@mediapipe/hands": "0.4.1675469240",
     "@mediapipe/tasks-vision": "^0.10.21",
     "@tensorflow/tfjs": "^4.22.0",
     "@testing-library/jest-dom": "^5.17.0",
