@@ -72,8 +72,7 @@ const LiveCaptions = () => {
 
     try { recognition.start(); }
     catch (err) { console.error(err); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language]);
+  }, [language, isListening]);
 
   // Auto-scroll on new lines
   useEffect(() => {

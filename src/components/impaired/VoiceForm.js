@@ -49,7 +49,6 @@ const VoiceForm = () => {
   /* ── Auto-trigger confirm on status change ── */
   useEffect(() => {
     if (status === 'CONFIRM_PROCEED') confirmProceed();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
   /* ─────────────────────────────────
