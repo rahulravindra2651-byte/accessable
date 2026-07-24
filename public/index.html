@@ -3,21 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AccessAble - Smart Assistant</title>
+    <title>AccessAble — Real-Time Assistive Communication Engine</title>
     
-    <!-- 1. Tailwind Script (Using the official Play CDN) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- 2. Allow Camera/Mic permissions in the Browser Header -->
+    <!-- Camera/Mic/Geolocation Permissions -->
     <meta http-equiv="Permissions-Policy" content="camera=*, microphone=*, geolocation=*">
 
-    <style>
-      /* Fallback if Tailwind fails to load */
-      body { background-color: #000; color: #fff; margin: 0; font-family: sans-serif; }
-      #root { min-height: 100vh; }
-    </style>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   </head>
   <body>
+    <noscript>You need to enable JavaScript to run AccessAble.</noscript>
     <div id="root"></div>
   </body>
 </html>
