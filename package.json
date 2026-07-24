@@ -11,9 +11,9 @@
     "dev:frontend": "react-scripts start"
   },
   "dependencies": {
-    "@mediapipe/camera_utils": "0.4.1675466862",
-    "@mediapipe/drawing_utils": "0.3.1675466124",
-    "@mediapipe/hands": "0.4.1675469240",
+    "@mediapipe/camera_utils": "latest",
+    "@mediapipe/drawing_utils": "latest",
+    "@mediapipe/hands": "latest",
     "@mediapipe/tasks-vision": "^0.10.21",
     "@tensorflow/tfjs": "^4.22.0",
     "@testing-library/jest-dom": "^5.17.0",
