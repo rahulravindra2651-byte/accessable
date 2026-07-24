@@ -326,10 +326,11 @@ video {
    5. CARDS
 ═══════════════════════════════════════ */
 .card {
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-2xl);
+  background-color: #131c2e !important;
+  border: 1.5px solid #2e3d5c !important;
+  border-radius: 1.25rem;
   box-shadow: var(--shadow-sm);
+  color: #ffffff !important;
   transition: box-shadow var(--t-slow), border-color var(--t-slow), transform var(--t-slow);
 }
 

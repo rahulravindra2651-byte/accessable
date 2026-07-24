@@ -2,26 +2,39 @@ import React, { useState } from 'react';
 import {
   Eye, Mic, Camera, FileText, Languages,
   Shield, Heart,
-  ChevronDown, ChevronUp, Star, ArrowRight, Check, Globe
+  ChevronDown, ChevronUp, ArrowRight
 } from 'lucide-react';
 
 /* ── Reusable section heading ── */
 const SectionHeading = ({ label, title, subtitle }) => (
   <div className="text-center mb-12 max-w-2xl mx-auto">
-    <span className="badge badge-primary mb-3">{label}</span>
-    <h2 className="text-3xl md:text-4xl font-black text-white mb-4">{title}</h2>
-    {subtitle && <p className="text-slate-300 text-lg font-medium">{subtitle}</p>}
+    <span className="badge badge-primary mb-3 text-xs sm:text-sm font-bold uppercase tracking-wider">{label}</span>
+    <h2 style={{ color: '#ffffff' }} className="text-3xl md:text-4xl font-black mb-4">
+      {title}
+    </h2>
+    {subtitle && (
+      <p style={{ color: '#cbd5e1' }} className="text-base sm:text-lg font-medium">
+        {subtitle}
+      </p>
+    )}
   </div>
 );
 
 /* ── Feature card ── */
-const FeatureCard = ({ icon: Icon, title, desc, color, delay }) => (
-  <div className="card p-6 flex flex-col bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 transition-all rounded-2xl shadow-xl">
+const FeatureCard = ({ icon: Icon, title, desc, color }) => (
+  <div
+    style={{ backgroundColor: '#131c2e', borderColor: '#2e3d5c' }}
+    className="p-6 flex flex-col border hover:border-indigo-500/60 transition-all rounded-2xl shadow-xl text-left"
+  >
     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 ${color}`}>
       <Icon size={22} className="text-white" />
     </div>
-    <h3 className="text-lg font-bold text-white mb-2">{title}</h3>
-    <p className="text-slate-300 text-sm leading-relaxed flex-1 font-medium">{desc}</p>
+    <h3 style={{ color: '#ffffff' }} className="text-xl font-bold mb-2">
+      {title}
+    </h3>
+    <p style={{ color: '#cbd5e1' }} className="text-sm leading-relaxed flex-1 font-medium">
+      {desc}
+    </p>
   </div>
 );
 
@@ -29,13 +42,15 @@ const FeatureCard = ({ icon: Icon, title, desc, color, delay }) => (
 const FAQItem = ({ q, a }) => {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-900/80">
+    <div style={{ backgroundColor: '#131c2e', borderColor: '#2e3d5c' }} className="border rounded-xl overflow-hidden mb-3">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between p-5 text-left font-bold text-white hover:bg-slate-800/60 transition-colors"
+        className="w-full flex items-center justify-between p-5 text-left font-bold hover:bg-slate-800/60 transition-colors"
         aria-expanded={open}
       >
-        <span className="text-base sm:text-lg">{q}</span>
+        <span style={{ color: '#ffffff' }} className="text-base sm:text-lg">
+          {q}
+        </span>
         {open ? (
           <ChevronUp size={20} className="text-indigo-400 flex-shrink-0" />
         ) : (
@@ -43,7 +58,7 @@ const FAQItem = ({ q, a }) => {
         )}
       </button>
       {open && (
-        <div className="px-5 pb-5 text-slate-300 text-sm sm:text-base leading-relaxed border-t border-slate-800/80 pt-4 font-medium">
+        <div style={{ color: '#cbd5e1', borderColor: '#2e3d5c' }} className="px-5 pb-5 text-sm sm:text-base leading-relaxed border-t pt-4 font-medium">
           {a}
         </div>
       )}
@@ -56,42 +71,36 @@ const FEATURES = [
     icon: Camera,
     title: 'AI Sign Language',
     color: 'bg-indigo-600',
-    delay: 100,
     desc: 'Real-time Indian Sign Language (ISL) continuous sentence translation powered by MediaPipe and OpenAI GPT-4o Vision.',
   },
   {
     icon: Mic,
     title: 'Voice Form Filling',
     color: 'bg-violet-600',
-    delay: 200,
     desc: 'Speak naturally — "My name is Rahul" — and the system auto-fills form fields using NLP-based extraction.',
   },
   {
     icon: Eye,
     title: 'Live Captions',
     color: 'bg-blue-600',
-    delay: 300,
     desc: 'Real-time speech-to-text transcription with timestamps, auto-punctuation, and 10 Indian regional language support.',
   },
   {
     icon: FileText,
     title: 'OCR Document Scanner',
     color: 'bg-emerald-600',
-    delay: 100,
     desc: 'Scan printed documents using your camera. Automatic fraud detection alerts for sensitive inputs like CVV or OTP.',
   },
   {
     icon: Languages,
     title: 'Multilingual Support',
     color: 'bg-orange-600',
-    delay: 200,
     desc: 'Support for English, Hindi, Kannada, Tamil, Telugu, Malayalam, Marathi, Bengali, Gujarati, and Punjabi.',
   },
   {
     icon: Shield,
     title: 'Emergency SOS',
     color: 'bg-red-600',
-    delay: 300,
     desc: 'One-tap emergency alert shares your GPS location via SMS with haptic feedback vibration alerts.',
   },
 ];
@@ -100,27 +109,6 @@ const STEPS = [
   { n: '01', title: 'Create Your Account', desc: 'Choose your role — Regular User or Sensory Impaired — and register in seconds.' },
   { n: '02', title: 'Access Your Workstation', desc: 'You are automatically directed to your dashboard with voice guidance or gesture tools.' },
   { n: '03', title: 'Start Communicating', desc: 'Use sign language translation, voice forms, live captions, or document scanning.' },
-];
-
-const TESTIMONIALS = [
-  {
-    name: 'Priya R.',
-    role: 'Hearing Impaired, Bengaluru',
-    rating: 5,
-    quote: 'The live captions feature has completely changed how I participate in meetings. The accuracy is incredible and it works in Kannada!',
-  },
-  {
-    name: 'Arjun M.',
-    role: 'Sign Language Interpreter, Chennai',
-    rating: 5,
-    quote: 'I use AccessAble to bridge communication gaps in real time. The MediaPipe and OpenAI gesture translation engines are remarkably accurate.',
-  },
-  {
-    name: 'Sanya T.',
-    role: 'Visually Impaired Student, Mumbai',
-    rating: 5,
-    quote: 'The voice form filling feature helped me complete my college application without any help. The NLP field extraction is smooth.',
-  },
 ];
 
 const FAQS = [
@@ -147,23 +135,24 @@ const FAQS = [
 ];
 
 const LandingPage = ({ onGetStarted, onLogin }) => (
-  <div className="bg-slate-950 text-white min-h-screen" id="landing">
+  <div style={{ backgroundColor: '#090d16', color: '#ffffff' }} className="min-h-screen" id="landing">
     {/* ── Header / Navbar ── */}
-    <header className="sticky top-0 z-50 bg-slate-900/90 backdrop-blur-xl border-b border-slate-800">
+    <header style={{ backgroundColor: '#0f172a', borderColor: '#1e293b' }} className="sticky top-0 z-50 backdrop-blur-xl border-b">
       <div className="container-app h-16 flex items-center justify-between px-4">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg">
             <span className="text-white font-black text-base">A</span>
           </div>
-          <span className="text-xl font-black text-white tracking-tight">AccessAble</span>
+          <span style={{ color: '#ffffff' }} className="text-xl font-black tracking-tight">AccessAble</span>
         </div>
 
         <nav className="hidden md:flex items-center gap-8" aria-label="Main navigation">
-          {['Features', 'How It Works', 'Testimonials', 'FAQ'].map((item) => (
+          {['Features', 'How It Works', 'FAQ'].map((item) => (
             <a
               key={item}
               href={`#${item.toLowerCase().replace(/\s+/g, '-')}`}
-              className="text-slate-300 hover:text-white font-semibold text-sm transition-colors"
+              style={{ color: '#cbd5e1' }}
+              className="hover:text-white font-semibold text-sm transition-colors"
             >
               {item}
             </a>
@@ -171,7 +160,7 @@ const LandingPage = ({ onGetStarted, onLogin }) => (
         </nav>
 
         <div className="flex items-center gap-3">
-          <button onClick={onLogin} className="btn btn-ghost btn-sm text-slate-200">
+          <button onClick={onLogin} style={{ color: '#ffffff' }} className="btn btn-ghost btn-sm">
             Sign In
           </button>
           <button onClick={onGetStarted} className="btn btn-primary btn-sm">
@@ -191,11 +180,11 @@ const LandingPage = ({ onGetStarted, onLogin }) => (
           🚀 Production Assistive Technology Engine
         </span>
 
-        <h1 className="text-4xl sm:text-6xl md:text-7xl font-black text-white leading-tight mb-6 tracking-tight max-w-4xl mx-auto">
+        <h1 style={{ color: '#ffffff' }} className="text-4xl sm:text-6xl md:text-7xl font-black leading-tight mb-6 tracking-tight max-w-4xl mx-auto">
           Breaking <span className="gradient-text">Communication</span> Barriers with AI
         </h1>
 
-        <p className="text-base sm:text-xl text-slate-300 max-w-2xl mx-auto mb-8 leading-relaxed font-medium">
+        <p style={{ color: '#cbd5e1' }} className="text-base sm:text-xl max-w-2xl mx-auto mb-8 leading-relaxed font-medium">
           AccessAble is an AI-powered assistive technology platform that empowers sensory-impaired individuals and enables seamless communication.
         </p>
 
@@ -209,7 +198,7 @@ const LandingPage = ({ onGetStarted, onLogin }) => (
         </div>
 
         {/* Telemetry Stats */}
-        <div className="grid grid-cols-3 gap-4 max-w-md mx-auto p-4 rounded-2xl bg-slate-900/80 border border-slate-800">
+        <div style={{ backgroundColor: '#131c2e', borderColor: '#2e3d5c' }} className="grid grid-cols-3 gap-4 max-w-md mx-auto p-4 rounded-2xl border">
           {[
             { n: '50+', label: 'ISL Signs' },
             { n: '10', label: 'Locales' },
@@ -217,7 +206,7 @@ const LandingPage = ({ onGetStarted, onLogin }) => (
           ].map((s) => (
             <div key={s.label} className="text-center">
               <p className="text-xl sm:text-2xl font-black text-indigo-400">{s.n}</p>
-              <p className="text-xs text-slate-400 font-semibold">{s.label}</p>
+              <p style={{ color: '#cbd5e1' }} className="text-xs font-semibold">{s.label}</p>
             </div>
           ))}
         </div>
@@ -225,7 +214,7 @@ const LandingPage = ({ onGetStarted, onLogin }) => (
     </section>
 
     {/* ── Features Section ── */}
-    <section id="features" className="py-20 bg-slate-900/60 border-y border-slate-800/80">
+    <section id="features" style={{ backgroundColor: '#0f172a', borderColor: '#1e293b' }} className="py-20 border-y">
       <div className="container-app px-4">
         <SectionHeading
           label="Core Engine Capabilities"
@@ -234,7 +223,7 @@ const LandingPage = ({ onGetStarted, onLogin }) => (
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {FEATURES.map((f, i) => (
+          {FEATURES.map((f) => (
             <FeatureCard key={f.title} {...f} />
           ))}
         </div>
@@ -252,10 +241,10 @@ const LandingPage = ({ onGetStarted, onLogin }) => (
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {STEPS.map((s) => (
-            <div key={s.n} className="card p-6 bg-slate-900 border border-slate-800 rounded-2xl">
+            <div key={s.n} style={{ backgroundColor: '#131c2e', borderColor: '#2e3d5c' }} className="p-6 border rounded-2xl text-left">
               <span className="text-3xl font-black text-indigo-400 block mb-2">{s.n}</span>
-              <h3 className="text-lg font-bold text-white mb-2">{s.title}</h3>
-              <p className="text-slate-300 text-sm leading-relaxed font-medium">{s.desc}</p>
+              <h3 style={{ color: '#ffffff' }} className="text-xl font-bold mb-2">{s.title}</h3>
+              <p style={{ color: '#cbd5e1' }} className="text-sm leading-relaxed font-medium">{s.desc}</p>
             </div>
           ))}
         </div>
@@ -263,7 +252,7 @@ const LandingPage = ({ onGetStarted, onLogin }) => (
     </section>
 
     {/* ── FAQ Section ── */}
-    <section id="faq" className="py-20 bg-slate-900/60 border-t border-slate-800">
+    <section id="faq" style={{ backgroundColor: '#0f172a', borderColor: '#1e293b' }} className="py-20 border-t">
       <div className="container-app max-w-3xl px-4">
         <SectionHeading
           label="FAQ"
@@ -271,7 +260,7 @@ const LandingPage = ({ onGetStarted, onLogin }) => (
           subtitle="Everything you need to know about AccessAble."
         />
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           {FAQS.map((faq) => (
             <FAQItem key={faq.q} {...faq} />
           ))}
@@ -280,9 +269,9 @@ const LandingPage = ({ onGetStarted, onLogin }) => (
     </section>
 
     {/* ── Footer ── */}
-    <footer className="py-8 border-t border-slate-800 text-slate-400 text-sm text-center">
+    <footer style={{ backgroundColor: '#090d16', borderColor: '#1e293b' }} className="py-8 border-t text-sm text-center">
       <div className="container-app flex flex-col sm:flex-row items-center justify-between gap-4 px-4">
-        <p>© 2025 AccessAble Platform. Built with ❤️ for accessibility and inclusion.</p>
+        <p style={{ color: '#cbd5e1' }}>© 2025 AccessAble Platform. Built with ❤️ for accessibility and inclusion.</p>
         <div className="flex items-center gap-1 text-xs text-indigo-400 font-semibold">
           <Heart size={14} className="text-red-500" />
           <span>WCAG 2.2 AA Compliant Engine</span>
