@@ -1,0 +1,23 @@
+# ─────────────────────────────────────────────────────────────
+# Render Blueprint Configuration for AccessAble
+# ─────────────────────────────────────────────────────────────
+
+services:
+  - type: web
+    name: accessable-platform
+    env: node
+    region: singapore # Choose closest region (singapore, oregon, frankfurt, ohio)
+    plan: free
+    buildCommand: npm run install:all && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGO_URI
+        sync: false # Set in Render dashboard or MongoDB Atlas URI
+      - key: JWT_SECRET
+        generateValue: true # Render automatically generates a secure 32-char secret
+      - key: OPENAI_API_KEY
+        sync: false # Optional: Enter OpenAI key for vision API

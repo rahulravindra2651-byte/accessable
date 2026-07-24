@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background-color: #0f172a; /* Dark slate */
+  color: white;
+}
+
+/* Tactile Button Press Animation */
+button:active {
+  transform: scale(0.96);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* High Contrast mode for Impaired Users */
+.impaired-container {
+  background: #000;
+}
