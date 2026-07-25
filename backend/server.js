@@ -22,12 +22,33 @@ app.use(
 );
 
 /* ── CORS ── */
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:5000',
+  // Render auto-assigns a URL like https://accessable-platform.onrender.com
+  // Add your exact Render URL here:
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: '*',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+      if (
+        ALLOWED_ORIGINS.includes(origin) ||
+        /\.onrender\.com$/.test(origin)   // any *.onrender.com subdomain
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS: origin ${origin} not allowed`));
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+
 
 /* ── Body parser ── */
 app.use(express.json({ limit: '10mb' }));
