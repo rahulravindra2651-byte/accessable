@@ -260,6 +260,15 @@ video {
   font-size: .8125rem;
 }
 
+.btn-xs {
+  padding: .25rem .625rem;
+  font-size: .75rem;
+  gap: .25rem;
+  border-radius: var(--r-md);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 /* ═══════════════════════════════════════
    DECORATIVE BLOBS & GRADIENTS
 ═══════════════════════════════════════ */
@@ -326,11 +335,11 @@ video {
    5. CARDS
 ═══════════════════════════════════════ */
 .card {
-  background-color: #131c2e !important;
-  border: 1.5px solid #2e3d5c !important;
+  background-color: var(--c-surface);
+  border: 1.5px solid var(--c-border);
   border-radius: 1.25rem;
   box-shadow: var(--shadow-sm);
-  color: #ffffff !important;
+  color: var(--c-text);
   transition: box-shadow var(--t-slow), border-color var(--t-slow), transform var(--t-slow);
 }
 
@@ -408,7 +417,57 @@ video {
   font-size: .875rem;
   font-weight: 600;
   color: var(--c-text);
-  margin-bottom: .375rem;
+  margin-bottom: 0;
+}
+
+/* ─── Form Layout Utilities ─── */
+
+/* Wraps one complete field (label row + input) */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: .375rem;
+}
+
+/* Row containing label (left) and optional voice button (right) */
+.form-field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  min-height: 1.5rem;
+}
+
+/* Positions icon absolutely inside an input */
+.input-icon {
+  position: absolute;
+  left: .75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--c-text-subtle);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+/* Inline form error — small, below relevant field or submit */
+.form-error {
+  display: flex;
+  align-items: flex-start;
+  gap: .375rem;
+  padding: .5rem .75rem;
+  border-radius: var(--r-md);
+  background: rgb(239 68 68 / .07);
+  border: 1px solid rgb(239 68 68 / .22);
+  color: #c53030;
+  font-size: .8125rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+[data-theme="dark"] .form-error {
+  background: rgb(239 68 68 / .12);
+  border-color: rgb(239 68 68 / .3);
+  color: #fc8181;
 }
 
 /* ═══════════════════════════════════════

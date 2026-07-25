@@ -97,42 +97,35 @@ const AssistantMode = () => {
                 <button
                   key={tool.id}
                   onClick={() => handleToolChange(tool.id)}
-                  className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200
-                    ${
-                      active
-                        ? 'border-amber-500 bg-amber-500/10'
-                        : 'border-transparent hover:border-amber-500/30'
-                    }`}
-                  style={!active ? { background: 'var(--c-surface)' } : {}}
+                  className="w-full flex items-center gap-4 p-4 rounded-2xl text-left transition-all duration-200"
+                  style={{
+                    border: `2px solid ${active ? '#f59e0b' : 'var(--c-border)'}`,
+                    background: active ? 'rgb(245 158 11 / .08)' : 'var(--c-surface)',
+                  }}
                   aria-label={tool.ariaLabel}
                   aria-pressed={active}
                 >
                   <div
-                    className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0
-                    ${active ? 'bg-amber-500' : 'bg-amber-500/20'}`}
+                    className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: active ? '#f59e0b' : 'rgb(245 158 11 / .15)' }}
                   >
                     <Icon
                       size={20}
-                      className={active ? 'text-black' : 'text-amber-500'}
+                      style={{ color: active ? '#000' : '#f59e0b' }}
                     />
                   </div>
                   <div>
-                    <p
-                      className="font-bold text-sm"
-                      style={{ color: 'var(--c-text)' }}
-                    >
+                    <p className="font-bold text-sm" style={{ color: 'var(--c-text)' }}>
                       {tool.label}
                     </p>
-                    <p
-                      className="text-xs"
-                      style={{ color: 'var(--c-text-muted)' }}
-                    >
+                    <p className="text-xs" style={{ color: 'var(--c-text-muted)' }}>
                       {tool.desc}
                     </p>
                   </div>
                 </button>
               );
             })}
+
 
             {/* Emergency Button Block */}
             <div

@@ -49,8 +49,8 @@ const TranslatorMode = () => {
 
         {/* Tab Bar */}
         <div
-          className="flex gap-2 mb-8 p-1 rounded-2xl w-fit"
-          style={{ background: 'var(--c-surface-2)' }}
+          className="flex gap-1 mb-8 p-1 rounded-xl w-fit"
+          style={{ background: 'var(--c-surface-2)', border: '1.5px solid var(--c-border)' }}
           role="tablist"
           aria-label="Translator module selection"
         >
@@ -64,19 +64,15 @@ const TranslatorMode = () => {
                 aria-selected={active}
                 aria-controls={`tabpanel-${tab.id}`}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200
-                  ${active ? 'shadow-md' : 'hover:opacity-80'}`}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200
+                  ${active ? 'shadow-sm' : 'hover:opacity-80'}`}
                 style={
                   active
-                    ? {
-                        background: 'var(--c-surface)',
-                        color: 'var(--c-primary)',
-                        boxShadow: 'var(--shadow-md)',
-                      }
-                    : { color: 'var(--c-text-muted)' }
+                    ? { background: 'var(--c-surface)', color: 'var(--c-primary)', boxShadow: 'var(--shadow-sm)' }
+                    : { color: 'var(--c-text-muted)', background: 'transparent' }
                 }
               >
-                <Icon size={16} />
+                <Icon size={15} />
                 {tab.label}
                 {tab.badge && (
                   <span className="badge badge-primary text-xs">{tab.badge}</span>
@@ -133,10 +129,10 @@ const TranslatorMode = () => {
         </div>
 
         {/* Technical Architecture Info Box */}
-        <div className="mt-10 card p-6 max-w-4xl">
+        <div className="mt-10 card p-5 max-w-4xl">
           <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 flex items-center justify-center flex-shrink-0 text-indigo-600">
-              <Star size={20} />
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgb(79 70 229 / .1)', color: '#4f46e5' }}>
+              <Star size={18} />
             </div>
             <div>
               <p className="text-sm font-bold mb-1" style={{ color: 'var(--c-text)' }}>
@@ -148,6 +144,7 @@ const TranslatorMode = () => {
             </div>
           </div>
         </div>
+
       </div>
     </div>
   );

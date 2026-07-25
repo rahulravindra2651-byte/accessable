@@ -1,25 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+/* App.css — component-specific overrides only.
+   The main design system lives in index.css.
+   Do NOT set global body colors here — those are controlled
+   by CSS variables in index.css and the theme system. */
 
-body {
-  margin: 0;
-  font-family: 'Inter', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  background-color: #0f172a; /* Dark slate */
-  color: white;
-}
-
-/* Tactile Button Press Animation */
+/* Tactile button press animation */
 button:active {
-  transform: scale(0.96);
+  transform: scale(0.97);
 }
 
+/* Glass card variant (used on landing page hero overlays) */
 .glass-card {
   background: rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* High Contrast mode for Impaired Users */
+/* High visibility container for sensory impaired mode */
 .impaired-container {
   background: #000;
 }
