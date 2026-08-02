@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Accessibility, Languages, Mic, Volume2 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { AccessibilityContext } from '../../context/AccessibilityContext';
@@ -39,6 +39,8 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeListeningField, setActiveListeningField] = useState(null);
+  // Guard: only one SpeechRecognition session at a time
+  const activeRecognitionRef = useRef(null);
 
   useEffect(() => {
     speakGuidance(
@@ -76,13 +78,21 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
       speakGuidance('Speech recognition is not supported in this browser.', 'assertive');
       return;
     }
+    // Abort any existing session first
+    if (activeRecognitionRef.current) {
+      try { activeRecognitionRef.current.abort(); } catch {}
+      activeRecognitionRef.current = null;
+    }
     setActiveListeningField(fieldName);
     speakGuidance(`Please say your ${fieldName}.`, 'polite');
     const recognition = new SR();
+    activeRecognitionRef.current = recognition;
     recognition.lang = 'en-US';
     recognition.continuous = false;
     recognition.interimResults = false;
+    let handled = false;
     recognition.onresult = (e) => {
+      handled = true;
       const result = e.results[0][0]?.transcript || '';
       if (result.trim()) {
         let cleaned = result.trim();
@@ -94,11 +104,24 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
       } else {
         speakGuidance(`Could not hear ${fieldName}. Please try again.`, 'polite');
       }
+      activeRecognitionRef.current = null;
       setActiveListeningField(null);
     };
-    recognition.onerror = () => { speakGuidance(`Speech recognition error for ${fieldName}.`, 'polite'); setActiveListeningField(null); };
-    recognition.onend = () => { setActiveListeningField(null); };
-    try { recognition.start(); } catch { setActiveListeningField(null); }
+    recognition.onerror = (e) => {
+      if (e.error === 'not-allowed') {
+        setError('Microphone access denied. Please allow microphone access in browser settings.');
+        speakGuidance('Microphone access denied. Please check your browser settings.', 'assertive');
+      } else {
+        speakGuidance(`Speech recognition error for ${fieldName}. Please try again.`, 'polite');
+      }
+      activeRecognitionRef.current = null;
+      setActiveListeningField(null);
+    };
+    recognition.onend = () => {
+      if (!handled) setActiveListeningField(null);
+      activeRecognitionRef.current = null;
+    };
+    try { recognition.start(); } catch { setActiveListeningField(null); activeRecognitionRef.current = null; }
   };
 
   const handleSubmit = async (e) => {

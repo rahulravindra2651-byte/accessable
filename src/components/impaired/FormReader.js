@@ -85,22 +85,28 @@ const FormReader = ({ fields = [], onClose }) => {
     speakField(idx);
   };
 
+  // Use a ref so the keydown handler always sees the latest state without re-registering
+  const keyHandlerRef = useRef(null);
+  keyHandlerRef.current = { status, currentIdx, play, pause, stop, repeat };
+
   useEffect(() => {
     const synth = synthRef.current;
     const handler = (e) => {
+      const { status: s, play: p, pause: pa, stop: st, repeat: r } = keyHandlerRef.current;
       if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
         e.preventDefault();
-        status === 'playing' ? pause() : play();
+        s === 'playing' ? pa() : p();
       }
-      if (e.code === 'Escape') stop();
-      if (e.key.toLowerCase() === 'r') repeat();
+      if (e.code === 'Escape') st();
+      if (e.key.toLowerCase() === 'r' && e.target.tagName !== 'INPUT') r();
     };
     window.addEventListener('keydown', handler);
     return () => {
       window.removeEventListener('keydown', handler);
       synth.cancel();
     };
-  }, [status, currentIdx, play, pause, stop, repeat]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Register once — handler uses keyHandlerRef for fresh state
 
   const statusLabel = { idle: 'Ready', playing: 'Reading…', paused: 'Paused', done: 'Complete' }[status];
 

@@ -255,12 +255,15 @@ const Navbar = () => {
             onClick={toggleVoiceGuidance}
             className={`btn btn-sm ${voiceGuidance ? 'btn-primary' : 'btn-secondary'
               }`}
+            aria-label={voiceGuidance ? 'Disable voice guidance prompts' : 'Enable voice guidance prompts'}
+            aria-pressed={voiceGuidance}
           >
             <Volume2 size={15} /> Prompts {voiceGuidance ? 'ON' : 'OFF'}
           </button>
           <button
             onClick={readPageContent}
             className="btn btn-secondary btn-sm"
+            aria-label="Read current page content aloud"
           >
             Read Page Aloud
           </button>
@@ -271,12 +274,15 @@ const Navbar = () => {
             }}
             className={`btn btn-sm ${isListeningNav ? 'btn-danger' : 'btn-accent'
               }`}
+            aria-label={isListeningNav ? 'Stop voice navigation' : 'Start hands-free voice navigation'}
+            aria-pressed={isListeningNav}
           >
             <Mic size={15} /> Nav {isListeningNav ? 'Active' : 'Start'}
           </button>
           <button
             onClick={toggleTheme}
             className="btn btn-secondary btn-sm"
+            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {isDark ? <Sun size={15} /> : <Moon size={15} />}{' '}
             {isDark ? 'Light' : 'Dark'}
@@ -285,6 +291,8 @@ const Navbar = () => {
             onClick={() => setHighContrast((v) => !v)}
             className={`btn btn-sm ${highContrast ? 'btn-primary' : 'btn-secondary'
               }`}
+            aria-label="Toggle high contrast accessibility mode"
+            aria-pressed={highContrast}
           >
             <Contrast size={15} /> Contrast
           </button>
@@ -292,6 +300,8 @@ const Navbar = () => {
             onClick={() => setLargeFont((v) => !v)}
             className={`btn btn-sm ${largeFont ? 'btn-primary' : 'btn-secondary'
               }`}
+            aria-label="Toggle large text mode"
+            aria-pressed={largeFont}
           >
             <Type size={15} /> Large Text
           </button>

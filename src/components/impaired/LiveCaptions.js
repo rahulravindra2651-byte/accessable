@@ -11,9 +11,13 @@ const LiveCaptions = () => {
   const recognitionRef = useRef(null);
   const scrollRef      = useRef(null);
   const lineIdRef      = useRef(0);
+  // Ref to track desired listening state — avoids stale closure in onend handler
+  const shouldRestartRef = useRef(false);
 
   const stopListening = useCallback(() => {
+    shouldRestartRef.current = false; // Signal: do NOT auto-restart
     recognitionRef.current?.stop();
+    recognitionRef.current = null;
     setIsListening(false);
     setInterim('');
   }, []);
@@ -24,6 +28,14 @@ const LiveCaptions = () => {
       alert('Speech Recognition is not supported in this browser. Please use Chrome or Edge.');
       return;
     }
+
+    // Stop any existing session first
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+      recognitionRef.current = null;
+    }
+
+    shouldRestartRef.current = true; // Signal: YES, keep listening
 
     const recognition = new SR();
     recognition.lang = language;
@@ -59,20 +71,45 @@ const LiveCaptions = () => {
       }
     };
 
-    recognition.onerror  = (e) => {
-      if (e.error !== 'no-speech') console.warn('[LiveCaptions] error:', e.error);
+    recognition.onerror = (e) => {
+      // 'no-speech' is normal; 'not-allowed' means mic permission denied
+      if (e.error === 'not-allowed') {
+        console.error('[LiveCaptions] Microphone permission denied.');
+        shouldRestartRef.current = false;
+        setIsListening(false);
+        alert('Microphone access was denied. Please allow microphone access in your browser settings.');
+      } else if (e.error !== 'no-speech' && e.error !== 'aborted') {
+        console.warn('[LiveCaptions] error:', e.error);
+      }
     };
+
     recognition.onend = () => {
       setInterim('');
-      // Auto-restart if still supposed to be listening
-      if (recognitionRef.current && isListening) {
-        try { recognition.start(); } catch {}
+      // Use the ref (NOT the stale closure state) to decide if we should restart
+      if (shouldRestartRef.current) {
+        try {
+          const newRecognition = new SR();
+          newRecognition.lang = recognition.lang;
+          newRecognition.continuous = true;
+          newRecognition.interimResults = true;
+          newRecognition.maxAlternatives = 1;
+          recognitionRef.current = newRecognition;
+          newRecognition.onstart = recognition.onstart;
+          newRecognition.onresult = recognition.onresult;
+          newRecognition.onerror = recognition.onerror;
+          newRecognition.onend = recognition.onend;
+          newRecognition.start();
+        } catch (err) {
+          console.warn('[LiveCaptions] restart failed:', err);
+        }
+      } else {
+        setIsListening(false);
       }
     };
 
     try { recognition.start(); }
-    catch (err) { console.error(err); }
-  }, [language, isListening]);
+    catch (err) { console.error('[LiveCaptions] start error:', err); }
+  }, [language]);
 
   // Auto-scroll on new lines
   useEffect(() => {

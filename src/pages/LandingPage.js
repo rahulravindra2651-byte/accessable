@@ -39,29 +39,38 @@ const FeatureCard = ({ icon: Icon, title, desc, color }) => (
 );
 
 /* ── FAQ item ── */
-const FAQItem = ({ q, a }) => {
+const FAQItem = ({ q, a, id }) => {
   const [open, setOpen] = useState(false);
+  const contentId = `faq-content-${id}`;
+  const buttonId = `faq-btn-${id}`;
   return (
     <div style={{ backgroundColor: '#131c2e', borderColor: '#2e3d5c' }} className="border rounded-xl overflow-hidden mb-3">
       <button
+        id={buttonId}
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between p-5 text-left font-bold hover:bg-slate-800/60 transition-colors"
         aria-expanded={open}
+        aria-controls={contentId}
       >
         <span style={{ color: '#ffffff' }} className="text-base sm:text-lg">
           {q}
         </span>
         {open ? (
-          <ChevronUp size={20} className="text-indigo-400 flex-shrink-0" />
+          <ChevronUp size={20} className="text-indigo-400 flex-shrink-0" aria-hidden="true" />
         ) : (
-          <ChevronDown size={20} className="text-slate-400 flex-shrink-0" />
+          <ChevronDown size={20} className="text-slate-400 flex-shrink-0" aria-hidden="true" />
         )}
       </button>
-      {open && (
-        <div style={{ color: '#cbd5e1', borderColor: '#2e3d5c' }} className="px-5 pb-5 text-sm sm:text-base leading-relaxed border-t pt-4 font-medium">
-          {a}
-        </div>
-      )}
+      <div
+        id={contentId}
+        role="region"
+        aria-labelledby={buttonId}
+        hidden={!open}
+        style={{ color: '#cbd5e1', borderColor: '#2e3d5c' }}
+        className="px-5 pb-5 text-sm sm:text-base leading-relaxed border-t pt-4 font-medium"
+      >
+        {a}
+      </div>
     </div>
   );
 };
@@ -136,6 +145,16 @@ const FAQS = [
 
 const LandingPage = ({ onGetStarted, onLogin }) => (
   <div style={{ backgroundColor: '#090d16', color: '#ffffff' }} className="min-h-screen" id="landing">
+    {/* Skip link for keyboard/screen reader users */}
+    <a
+      href="#features"
+      className="skip-link"
+      style={{ position: 'absolute', top: '-40px', left: 0, zIndex: 9999, padding: '8px 16px', background: '#4f46e5', color: '#fff', fontWeight: 'bold', borderRadius: '0 0 4px 0' }}
+      onFocus={(e) => { e.currentTarget.style.top = '0'; }}
+      onBlur={(e) => { e.currentTarget.style.top = '-40px'; }}
+    >
+      Skip to main content
+    </a>
     {/* ── Header / Navbar ── */}
     <header style={{ backgroundColor: '#0f172a', borderColor: '#1e293b' }} className="sticky top-0 z-50 backdrop-blur-xl border-b">
       <div className="container-app h-16 flex items-center justify-between px-4">
@@ -261,8 +280,8 @@ const LandingPage = ({ onGetStarted, onLogin }) => (
         />
 
         <div className="space-y-3">
-          {FAQS.map((faq) => (
-            <FAQItem key={faq.q} {...faq} />
+          {FAQS.map((faq, idx) => (
+            <FAQItem key={faq.q} id={idx} {...faq} />
           ))}
         </div>
       </div>

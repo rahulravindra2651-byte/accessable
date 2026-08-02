@@ -60,24 +60,30 @@ export const announce = (
     }, 50);
   }
 
-  // 2. Speak aloud via Web Speech Synthesis if requested and supported
+// 2. Speak aloud via Web Speech Synthesis if requested and supported
   if (speakAloud && typeof window !== 'undefined' && 'speechSynthesis' in window) {
     const synth = window.speechSynthesis;
-    // Don't cancel if already speaking another important announcement unless assertive
+
     if (priority === 'assertive') {
+      // Assertive: interrupt immediately
       synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.rate = options.rate || 0.95;
+      utterance.pitch = options.pitch || 1.0;
+      utterance.lang = options.lang || 'en-US';
+      if (options.voice) utterance.voice = options.voice;
+      synth.speak(utterance);
+    } else {
+      // Polite: cancel any pending polite speech to prevent pile-up,
+      // then speak after a short debounce so rapid nav changes only say the last message
+      synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.rate = options.rate || 0.95;
+      utterance.pitch = options.pitch || 1.0;
+      utterance.lang = options.lang || 'en-US';
+      if (options.voice) utterance.voice = options.voice;
+      synth.speak(utterance);
     }
-
-    const utterance = new SpeechSynthesisUtterance(message);
-    utterance.rate = options.rate || 0.95;
-    utterance.pitch = options.pitch || 1.0;
-    utterance.lang = options.lang || 'en-US';
-
-    if (options.voice) {
-      utterance.voice = options.voice;
-    }
-
-    synth.speak(utterance);
   }
 };
 

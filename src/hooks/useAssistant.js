@@ -1,42 +1,74 @@
 import { useState } from 'react';
 
+/**
+ * Returns a promise that resolves with the best available voice for the given language.
+ * Handles the browser quirk where getVoices() returns [] on first call and requires
+ * waiting for the 'voiceschanged' event.
+ */
+const getBestVoice = (language) => {
+  return new Promise((resolve) => {
+    const langCode = language.split('-')[0];
+    const INDIAN_LANGS = ['hi', 'ta', 'te', 'kn', 'ml', 'bn', 'gu', 'mr', 'pa', 'or', 'as'];
+
+    const pickVoice = (voices) => {
+      if (INDIAN_LANGS.includes(langCode)) {
+        return (
+          voices.find((v) => v.lang === language) ||
+          voices.find((v) => v.lang.startsWith(langCode)) ||
+          voices.find((v) => v.lang.startsWith('en')) ||
+          voices[0]
+        );
+      }
+      return voices.find((v) => v.lang.startsWith(langCode)) || voices[0];
+    };
+
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      resolve(pickVoice(voices));
+    } else {
+      // Chrome/Edge loads voices async — wait for the event
+      const onVoicesChanged = () => {
+        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
+        resolve(pickVoice(window.speechSynthesis.getVoices()));
+      };
+      window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged);
+      // Safety timeout: resolve with null if event never fires
+      setTimeout(() => {
+        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
+        resolve(null);
+      }, 2000);
+    }
+  });
+};
+
 export const useAssistant = (language = 'en-US') => {
   const [isMicActive, setIsMicActive] = useState(false);
 
-  const speak = (text) => {
-    return new Promise((resolve) => {
+  const speak = async (text) => {
+    return new Promise(async (resolve) => {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-
-      // Set language and try to find appropriate voice
       utterance.lang = language;
-      const voices = window.speechSynthesis.getVoices();
-      const langCode = language.split('-')[0]; // e.g., 'en' from 'en-US'
 
-      // For Indian languages, try multiple fallbacks
-      let preferredVoice = null;
-      if (['hi', 'ta', 'te', 'kn', 'ml', 'bn', 'gu', 'mr', 'pa', 'or', 'as'].includes(langCode)) {
-        // Try exact language match first
-        preferredVoice = voices.find(voice => voice.lang === language) ||
-                        voices.find(voice => voice.lang.startsWith(langCode)) ||
-                        voices.find(voice => voice.lang.startsWith('en')); // Fallback to English
-      } else {
-        preferredVoice = voices.find(voice => voice.lang.startsWith(langCode)) || voices[0];
-      }
-
+      // Wait for voices to be available (fixes Chrome/Edge async voice loading)
+      const preferredVoice = await getBestVoice(language);
       if (preferredVoice) {
         utterance.voice = preferredVoice;
         console.log(`Using voice: ${preferredVoice.name} for language: ${language}`);
       } else {
-        console.warn(`No suitable voice found for ${language}, using default`);
+        console.warn(`No suitable voice found for ${language}, using browser default`);
       }
 
       utterance.onend = () => setTimeout(resolve, 500);
+      utterance.onerror = (e) => {
+        if (e.error !== 'interrupted') console.warn('[useAssistant] speak error:', e.error);
+        resolve();
+      };
       window.speechSynthesis.speak(utterance);
     });
   };
 
-  const listen = (callback) => {
+  const listen = () => {
     return new Promise((resolve) => {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -62,7 +94,7 @@ export const useAssistant = (language = 'en-US') => {
 
       const timeoutId = setTimeout(() => {
         if (!resolved) {
-          console.warn('Voice input timed out');
+          console.warn('[useAssistant] Voice input timed out after 12s');
           try { recognition.stop(); } catch (e) {}
           safeResolve('');
         }
@@ -70,24 +102,30 @@ export const useAssistant = (language = 'en-US') => {
 
       recognition.onstart = () => {
         setIsMicActive(true);
-        console.log('Microphone is NOW RECORDING...');
+        console.log('[useAssistant] Microphone is NOW RECORDING...');
       };
 
       recognition.onresult = (e) => {
         const result = e.results[0][0]?.transcript?.toLowerCase() || '';
-        console.log('Voice Input Received:', result);
-        if (typeof callback === 'function') callback(result);
+        console.log('[useAssistant] Voice Input Received:', result);
         safeResolve(result);
       };
 
       recognition.onerror = (err) => {
-        console.error('Speech Error:', err.error); 
+        if (err.error === 'not-allowed') {
+          console.error('[useAssistant] Microphone permission denied. Please allow microphone access.');
+          setIsMicActive(false);
+        } else if (err.error === 'no-speech') {
+          console.warn('[useAssistant] No speech detected.');
+        } else {
+          console.error('[useAssistant] Speech Error:', err.error);
+        }
         safeResolve('');
       };
 
       recognition.onend = () => {
         if (!resolved) {
-          console.log('Recognition ended with no speech. Returning empty string.');
+          console.log('[useAssistant] Recognition ended with no result.');
           safeResolve('');
         }
       };
@@ -95,7 +133,7 @@ export const useAssistant = (language = 'en-US') => {
       try {
         recognition.start();
       } catch (startErr) {
-        console.error('Recognition start failed', startErr);
+        console.error('[useAssistant] Recognition start failed:', startErr);
         safeResolve('');
       }
     });

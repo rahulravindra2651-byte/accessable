@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
+
+// Constant outside component — prevents array recreation on every render
+const FREE_FIELDS = [
+  'name', 'email', 'phone', 'age', 'address', 'dateOfBirth', 'gender', 'city', 'state', 'pincode'
+];
+
 import { useAssistant } from '../../hooks/useAssistant';
 import { useOCR } from '../../hooks/useOCR';
 import { extractFormFields } from '../../utils/formProcessor';
@@ -31,9 +37,9 @@ const VoiceForm = () => {
   const [nlpListening, setNlpListening] = useState(false);
   const [nlpResult, setNlpResult] = useState(null);
 
-  const FREE_FIELDS = [
-    'name', 'email', 'phone', 'age', 'address', 'dateOfBirth', 'gender', 'city', 'state', 'pincode'
-  ];
+
+  // Guard to prevent concurrent conversational loops
+  const isRunningRef = useRef(false);
 
   /* ── Browser check & spoken guidance on mount ── */
   useEffect(() => {
@@ -47,8 +53,17 @@ const VoiceForm = () => {
   }, [speakGuidance]);
 
   /* ── Auto-trigger confirm on status change ── */
+  // Note: we use a ref-based guard and only fire once per CONFIRM_PROCEED transition
+  const didTriggerConfirmRef = useRef(false);
   useEffect(() => {
-    if (status === 'CONFIRM_PROCEED') confirmProceed();
+    if (status === 'CONFIRM_PROCEED' && !didTriggerConfirmRef.current) {
+      didTriggerConfirmRef.current = true;
+      confirmProceed();
+    }
+    if (status !== 'CONFIRM_PROCEED') {
+      didTriggerConfirmRef.current = false;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
   /* ─────────────────────────────────
@@ -101,16 +116,23 @@ const VoiceForm = () => {
   };
 
   const confirmProceed = async () => {
-    await speak(
-      `Form scanned successfully. Found ${fields.length} fields: ${fields.join(', ')}. Shall we start filling them? Say yes or no.`
-    );
-    const response = await listen();
-    if (response?.toLowerCase().match(/\b(yes|yeah|sure|ok|proceed|start)\b/)) {
-      await speak('Starting voice form assistant.');
-      runConversationalLoop(0);
-    } else {
-      await speak('Okay. Form filling cancelled.');
-      setStatus('IDLE');
+    if (isRunningRef.current) return; // Prevent double-invocation
+    isRunningRef.current = true;
+    try {
+      await speak(
+        `Form scanned successfully. Found ${fields.length} fields: ${fields.join(', ')}. Shall we start filling them? Say yes or no.`
+      );
+      const response = await listen();
+      if (response?.toLowerCase().match(/\b(yes|yeah|sure|ok|proceed|start)\b/)) {
+        await speak('Starting voice form assistant.');
+        setStatus('FILLING');
+        runConversationalLoop(0);
+      } else {
+        await speak('Okay. Form filling cancelled.');
+        setStatus('IDLE');
+      }
+    } finally {
+      isRunningRef.current = false;
     }
   };
 
