@@ -63,7 +63,6 @@ const VoiceForm = () => {
     if (status !== 'CONFIRM_PROCEED') {
       didTriggerConfirmRef.current = false;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
   /* ─────────────────────────────────

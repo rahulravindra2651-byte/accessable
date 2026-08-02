@@ -105,7 +105,6 @@ const FormReader = ({ fields = [], onClose }) => {
       window.removeEventListener('keydown', handler);
       synth.cancel();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Register once — handler uses keyHandlerRef for fresh state
 
   const statusLabel = { idle: 'Ready', playing: 'Reading…', paused: 'Paused', done: 'Complete' }[status];
