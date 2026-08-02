@@ -8,7 +8,7 @@ const FREE_FIELDS = [
 import { useAssistant } from '../../hooks/useAssistant';
 import { useOCR } from '../../hooks/useOCR';
 import { extractFormFields } from '../../utils/formProcessor';
-import { extractFieldFromSpeech, humaniseField, cleanSpokenValue } from '../../utils/nlpExtractor';
+import { extractFieldFromSpeech, humaniseField, cleanSpokenValue, detectConfirmationIntent } from '../../utils/nlpExtractor';
 import { LANGUAGES, getOCRLang } from '../../utils/languages';
 import { AccessibilityContext } from '../../context/AccessibilityContext';
 import FormReader from './FormReader';
@@ -42,10 +42,6 @@ const VoiceForm = () => {
   const isRunningRef = useRef(false);
   // Ref to hold current scanned fields so closure state is never stale
   const fieldsRef = useRef([]);
-
-  /* ── Affirmation regex helpers ── */
-  const IS_AFFIRMATIVE = /\b(yes|yeah|yep|yup|sure|ok|okay|correct|right|proceed|start|confirm|affirmative|haan|ha|go ahead|do it|positive)\b/i;
-  const IS_NEGATIVE = /\b(no|nope|not|wrong|incorrect|cancel|stop|dont|don't)\b/i;
 
   /* ── Browser check & spoken guidance on mount ── */
   useEffect(() => {
@@ -109,28 +105,55 @@ const VoiceForm = () => {
     }
   };
 
-  const confirmProceed = async (targetFields = fieldsRef.current) => {
-    if (isRunningRef.current) return; // Prevent double-invocation
+  const confirmProceed = async (targetFields = fieldsRef.current, attempt = 1) => {
+    if (isRunningRef.current && attempt === 1) return; // Prevent double-invocation
     isRunningRef.current = true;
     const activeList = targetFields && targetFields.length > 0 ? targetFields : fieldsRef.current;
 
     try {
-      await speak(
-        `Form scanned successfully. Found ${activeList.length} fields: ${activeList.join(', ')}. Shall we start filling them? Say yes or no.`
-      );
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      const response = await listen();
+      if (attempt === 1) {
+        await speak(
+          `Form scanned successfully. Found ${activeList.length} fields: ${activeList.join(', ')}. Should we continue to fill the form? Say Yes or No.`
+        );
+      } else {
+        await speak(
+          `I didn't hear a clear response. Should we fill the form? Say Yes to start or Say No to cancel.`
+        );
+      }
 
-      if (IS_AFFIRMATIVE.test(response || '')) {
+      // Pause 600ms so TTS speaker audio output stops completely before mic recording begins
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      const rawResponse = await listen();
+      const intent = detectConfirmationIntent(rawResponse);
+
+      console.log(`[VoiceForm confirmProceed] Attempt ${attempt}/3 | Intent: ${intent} | Raw: "${rawResponse}"`);
+
+      if (intent === 'AFFIRMATIVE') {
+        console.log('User confirmed. Starting form filling.');
         await speak('Starting voice form assistant.');
         setStatus('FILLING');
         await runConversationalLoop(activeList, 0);
-      } else {
+      } else if (intent === 'NEGATIVE') {
+        console.log('User cancelled form filling.');
         await speak('Okay. Form filling cancelled.');
         setStatus('IDLE');
+      } else {
+        // UNRECOGNIZED: Try up to 3 times before staying in CONFIRM_PROCEED mode
+        if (attempt < 3) {
+          console.log(`Unrecognized response on attempt ${attempt}. Retrying confirmation prompt...`);
+          isRunningRef.current = false;
+          await confirmProceed(activeList, attempt + 1);
+        } else {
+          console.warn('Max confirmation attempts reached without a clear answer.');
+          await speak('No clear voice response detected. Tap Yes to start filling or No to cancel.');
+          setStatus('CONFIRM_PROCEED');
+        }
       }
     } finally {
-      isRunningRef.current = false;
+      if (attempt === 1) {
+        isRunningRef.current = false;
+      }
     }
   };
 
@@ -148,7 +171,7 @@ const VoiceForm = () => {
 
     // 1. Assistant asks for field
     await speak(`Field ${index + 1} of ${activeList.length}: Please say your ${label}.`);
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 600));
 
     // 2. Assistant listens
     const input = await listen();
@@ -164,14 +187,15 @@ const VoiceForm = () => {
 
     // 4. Conversational confirmation
     await speak(`You said: ${valueToUse} for ${label}. Is this correct? Say yes or no.`);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    const confirm = await listen();
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    const confirmRaw = await listen();
+    const confirmIntent = detectConfirmationIntent(confirmRaw);
 
-    if (IS_AFFIRMATIVE.test(confirm || '')) {
+    if (confirmIntent === 'AFFIRMATIVE') {
       setFormData((prev) => ({ ...prev, [label]: valueToUse }));
       await speak(`${label} entered successfully.`);
       await runConversationalLoop(activeList, index + 1);
-    } else if (IS_NEGATIVE.test(confirm || '')) {
+    } else if (confirmIntent === 'NEGATIVE') {
       await speak("Okay, let's try entering this field again.");
       await runConversationalLoop(activeList, index);
     } else {
@@ -201,9 +225,11 @@ const VoiceForm = () => {
       await speak(
         `I recognized ${humaniseField(extracted.field)} as ${extracted.value}. Is this correct? Say yes or no.`
       );
-      const confirm = await listen();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      const confirmRaw = await listen();
+      const confirmIntent = detectConfirmationIntent(confirmRaw);
 
-      if (IS_AFFIRMATIVE.test(confirm || '')) {
+      if (confirmIntent === 'AFFIRMATIVE') {
         setNlpResult(extracted);
         setNlpFields((prev) => ({ ...prev, [extracted.field]: extracted.value }));
         await speak(`${humaniseField(extracted.field)} updated to ${extracted.value}.`);

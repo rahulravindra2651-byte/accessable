@@ -145,6 +145,62 @@ export const humaniseField = (fieldName) => {
     .trim();
 };
 
+const AFFIRMATIVE_WORDS = [
+  'yes', 'yeah', 'yep', 'yup', 'sure', 'ok', 'okay',
+  'continue', 'proceed', 'start', 'confirm', 'affirmative',
+  'haan', 'ha', 'go ahead', 'do it', 'positive', 'right', 'correct'
+];
+
+const NEGATIVE_WORDS = [
+  'no', 'nope', 'not', 'wrong', 'incorrect', 'cancel',
+  'stop', 'dont', "don't", 'negative', 'exit', 'abort'
+];
+
+/**
+ * Classifies speech transcript into 'AFFIRMATIVE', 'NEGATIVE', or 'UNRECOGNIZED'.
+ * Prints detailed debug logs showing raw transcript, processed string, detected intent, and boolean values.
+ * @param {string} transcript — raw speech recognition output
+ * @returns {'AFFIRMATIVE' | 'NEGATIVE' | 'UNRECOGNIZED'}
+ */
+export const detectConfirmationIntent = (transcript) => {
+  const raw = transcript || '';
+  const processed = raw.trim().toLowerCase();
+
+  console.group('🎙️ [Voice Intent Debugger]');
+  console.log('• Raw Speech Output:', JSON.stringify(raw));
+  console.log('• Processed Transcript:', JSON.stringify(processed));
+
+  if (!processed) {
+    console.log('• Intent Detected: UNRECOGNIZED (Empty speech output)');
+    console.log('• Booleans -> isAffirmative: false, isNegative: false');
+    console.groupEnd();
+    return 'UNRECOGNIZED';
+  }
+
+  const isAffirmative = AFFIRMATIVE_WORDS.some((word) => processed.includes(word));
+  const isNegative = NEGATIVE_WORDS.some((word) => processed.includes(word));
+
+  console.log('• Booleans -> isAffirmative:', isAffirmative, '| isNegative:', isNegative);
+
+  let intent = 'UNRECOGNIZED';
+  if (isAffirmative && !isNegative) {
+    intent = 'AFFIRMATIVE';
+  } else if (isNegative && !isAffirmative) {
+    intent = 'NEGATIVE';
+  } else if (isAffirmative && isNegative) {
+    const affIndices = AFFIRMATIVE_WORDS.map((w) => processed.indexOf(w)).filter((i) => i !== -1);
+    const negIndices = NEGATIVE_WORDS.map((w) => processed.indexOf(w)).filter((i) => i !== -1);
+    const firstAff = Math.min(...affIndices);
+    const firstNeg = Math.min(...negIndices);
+    intent = firstAff < firstNeg ? 'AFFIRMATIVE' : 'NEGATIVE';
+  }
+
+  console.log('• Final Detected Intent:', intent);
+  console.groupEnd();
+
+  return intent;
+};
+
 /**
  * Map a field name to the most likely spoken prompt.
  */
