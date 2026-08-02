@@ -40,6 +40,8 @@ const VoiceForm = () => {
 
   // Guard to prevent concurrent conversational loops
   const isRunningRef = useRef(false);
+  // Ref to hold current scanned fields so closure state is never stale
+  const fieldsRef = useRef([]);
 
   /* ── Affirmation regex helpers ── */
   const IS_AFFIRMATIVE = /\b(yes|yeah|yep|yup|sure|ok|okay|correct|right|proceed|start|confirm|affirmative|haan|ha|go ahead|do it|positive)\b/i;
@@ -55,19 +57,6 @@ const VoiceForm = () => {
       speakGuidance('Voice Form Assistant active. Choose Scan a Form or Free Voice Fill.', 'polite');
     }
   }, [speakGuidance]);
-
-  /* ── Auto-trigger confirm on status change ── */
-  // Note: we use a ref-based guard and only fire once per CONFIRM_PROCEED transition
-  const didTriggerConfirmRef = useRef(false);
-  useEffect(() => {
-    if (status === 'CONFIRM_PROCEED' && !didTriggerConfirmRef.current) {
-      didTriggerConfirmRef.current = true;
-      confirmProceed();
-    }
-    if (status !== 'CONFIRM_PROCEED') {
-      didTriggerConfirmRef.current = false;
-    }
-  }, [status]);
 
   /* ─────────────────────────────────
      SCAN MODE — OCR → Conversational Loop
@@ -106,10 +95,12 @@ const VoiceForm = () => {
         return;
       }
 
+      fieldsRef.current = detected;
       setFields(detected);
       setCurrentIdx(0);
       setFormData({});
       setStatus('CONFIRM_PROCEED');
+      confirmProceed(detected);
     } catch (err) {
       const msg = err.message || 'Error scanning form.';
       await speak(msg);
@@ -118,18 +109,22 @@ const VoiceForm = () => {
     }
   };
 
-  const confirmProceed = async () => {
+  const confirmProceed = async (targetFields = fieldsRef.current) => {
     if (isRunningRef.current) return; // Prevent double-invocation
     isRunningRef.current = true;
+    const activeList = targetFields && targetFields.length > 0 ? targetFields : fieldsRef.current;
+
     try {
       await speak(
-        `Form scanned successfully. Found ${fields.length} fields: ${fields.join(', ')}. Shall we start filling them? Say yes or no.`
+        `Form scanned successfully. Found ${activeList.length} fields: ${activeList.join(', ')}. Shall we start filling them? Say yes or no.`
       );
+      await new Promise((resolve) => setTimeout(resolve, 300));
       const response = await listen();
+
       if (IS_AFFIRMATIVE.test(response || '')) {
         await speak('Starting voice form assistant.');
         setStatus('FILLING');
-        runConversationalLoop(0);
+        await runConversationalLoop(activeList, 0);
       } else {
         await speak('Okay. Form filling cancelled.');
         setStatus('IDLE');
@@ -139,24 +134,27 @@ const VoiceForm = () => {
     }
   };
 
-  const runConversationalLoop = async (index) => {
-    if (index >= fields.length) {
+  const runConversationalLoop = async (targetFields = fieldsRef.current, index = 0) => {
+    const activeList = targetFields && targetFields.length > 0 ? targetFields : fieldsRef.current;
+
+    if (index >= activeList.length) {
       setStatus('REVIEW');
       await speak('Form completed successfully! Review your answers below or download JSON.');
       return;
     }
 
-    const label = fields[index];
+    const label = activeList[index];
     setCurrentIdx(index);
 
     // 1. Assistant asks for field
-    await speak(`Field ${index + 1} of ${fields.length}: Please say your ${label}.`);
+    await speak(`Field ${index + 1} of ${activeList.length}: Please say your ${label}.`);
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
     // 2. Assistant listens
     const input = await listen();
     if (!input?.trim()) {
       await speak("I didn't catch anything. Let me ask again.");
-      return runConversationalLoop(index);
+      return runConversationalLoop(activeList, index);
     }
 
     // 3. NLP extraction & formatting fallback
@@ -166,18 +164,19 @@ const VoiceForm = () => {
 
     // 4. Conversational confirmation
     await speak(`You said: ${valueToUse} for ${label}. Is this correct? Say yes or no.`);
+    await new Promise((resolve) => setTimeout(resolve, 300));
     const confirm = await listen();
 
     if (IS_AFFIRMATIVE.test(confirm || '')) {
       setFormData((prev) => ({ ...prev, [label]: valueToUse }));
       await speak(`${label} entered successfully.`);
-      runConversationalLoop(index + 1);
+      await runConversationalLoop(activeList, index + 1);
     } else if (IS_NEGATIVE.test(confirm || '')) {
       await speak("Okay, let's try entering this field again.");
-      runConversationalLoop(index);
+      await runConversationalLoop(activeList, index);
     } else {
       await speak("I couldn't understand your response. Let's try this field again.");
-      runConversationalLoop(index);
+      await runConversationalLoop(activeList, index);
     }
   };
 
