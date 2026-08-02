@@ -9,7 +9,7 @@ import { useAssistant } from '../../hooks/useAssistant';
 import { useOCR } from '../../hooks/useOCR';
 import { extractFormFields } from '../../utils/formProcessor';
 import { extractFieldFromSpeech, humaniseField, cleanSpokenValue, detectConfirmationIntent } from '../../utils/nlpExtractor';
-import { LANGUAGES, getOCRLang } from '../../utils/languages';
+import { LANGUAGES, getOCRLang, getOCRLangString, detectLanguageFromText } from '../../utils/languages';
 import { AccessibilityContext } from '../../context/AccessibilityContext';
 import FormReader from './FormReader';
 import {
@@ -20,7 +20,7 @@ import {
 const VoiceForm = () => {
   const [language, setLanguage] = useState('en-US');
   const { speak, listen, isMicActive } = useAssistant(language);
-  const { scanImage } = useOCR(getOCRLang(language));
+  const { scanImage } = useOCR(getOCRLangString(language));
   const { speakGuidance } = useContext(AccessibilityContext);
 
   const [mode, setMode] = useState('choose'); // choose | scan | free
@@ -61,7 +61,10 @@ const VoiceForm = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+    const isPdf = file.type === 'application/pdf' || (file.name && file.name.toLowerCase().endsWith('.pdf'));
+    const isImage = file.type && file.type.startsWith('image/');
+
+    if (!isImage && !isPdf) {
       const msg = 'Please select a valid image or PDF file.';
       setError(msg);
       await speak(msg);
@@ -70,21 +73,50 @@ const VoiceForm = () => {
 
     setStatus('SCANNING');
     setError('');
-    await speak('Scanning your form with optical character recognition. Please wait.');
+
+    console.group('📄 [STAGE 1: Form Upload]');
+    console.log('• File Name:', file.name);
+    console.log('• File Type:', file.type || (isPdf ? 'application/pdf' : 'unknown'));
+    console.log('• File Size:', file.size, 'bytes');
+    console.groupEnd();
+
+    await speak('Scanning your form document with optical character recognition. Please wait.');
 
     try {
+      const ocrLangCode = getOCRLangString(language);
+      console.group('🔍 [STAGE 2: OCR Extraction]');
+      console.log('• Initial Target OCR Lang:', ocrLangCode);
       const rawText = await scanImage(file);
+      console.log('• Raw Extracted Text Length:', rawText?.length || 0, 'characters');
+      console.log('• Extracted Snippet:', JSON.stringify((rawText || '').slice(0, 150)));
+      console.groupEnd();
+
       if (!rawText?.trim()) {
-        const msg = 'No text detected. Please try a clearer image with better contrast.';
+        const msg = 'No text detected. Please try a clearer image or PDF document.';
         await speak(msg);
         setError(msg);
         setStatus('IDLE');
         return;
       }
 
-      const detected = extractFormFields(rawText, getOCRLang(language));
+      // Stage 3: Automatic Language Detection
+      const autoLang = detectLanguageFromText(rawText);
+      console.group('🌐 [STAGE 3: Language Detection]');
+      console.log('• Detected Language Code:', autoLang);
+      console.log('• Active Language State:', language);
+      if (autoLang !== language) {
+        console.log(`• Language Auto-Switched: ${language} -> ${autoLang}`);
+        setLanguage(autoLang);
+      }
+      console.groupEnd();
+
+      const activeOcrLang = getOCRLangString(autoLang);
+      const detected = extractFormFields(rawText, activeOcrLang);
+
+      console.log('📋 [Extracted Form Fields]:', detected);
+
       if (detected.length === 0) {
-        const msg = 'No form fields detected. Make sure the image contains a clear form with field labels.';
+        const msg = 'No form fields detected. Make sure the document contains clear form labels.';
         await speak(msg);
         setError(msg);
         setStatus('IDLE');
@@ -96,8 +128,9 @@ const VoiceForm = () => {
       setCurrentIdx(0);
       setFormData({});
       setStatus('CONFIRM_PROCEED');
-      confirmProceed(detected);
+      confirmProceed(detected, 1, autoLang);
     } catch (err) {
+      console.error('❌ [OCR Scan Error]:', err);
       const msg = err.message || 'Error scanning form.';
       await speak(msg);
       setError(msg);
