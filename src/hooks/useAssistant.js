@@ -49,17 +49,24 @@ export const useAssistant = (language = 'en-US') => {
 
   const speak = async (text) => {
     return new Promise(async (resolve) => {
-      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window) || !text) {
         return resolve();
       }
 
-      window.speechSynthesis.cancel();
+      // Clear previous speaking state safely
+      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        window.speechSynthesis.cancel();
+        await new Promise((r) => setTimeout(r, 60));
+      }
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
       }
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = language;
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
 
       // Keep reference in Set to prevent Chrome GC from dropping utterance mid-speech
       activeUtterances.add(utterance);
@@ -79,15 +86,27 @@ export const useAssistant = (language = 'en-US') => {
           done = true;
           activeUtterances.delete(utterance);
           clearTimeout(fallbackTimer);
-          setTimeout(resolve, 300);
+          clearTimeout(startWatchdog);
+          setTimeout(resolve, 200);
         }
       };
+
+      // Watchdog: If onstart doesn't fire within 400ms, force resume
+      const startWatchdog = setTimeout(() => {
+        if (!done && window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+      }, 400);
 
       // Fallback timer: Chromium speechSynthesis onend event sometimes fails to fire
       const fallbackTimer = setTimeout(() => {
         console.warn('[useAssistant] Speech synthesis fallback timer triggered');
         finish();
       }, Math.max(2500, text.length * 80));
+
+      utterance.onstart = () => {
+        clearTimeout(startWatchdog);
+      };
 
       utterance.onend = finish;
       utterance.onerror = (e) => {
@@ -118,7 +137,7 @@ export const useAssistant = (language = 'en-US') => {
       }
 
       // Stop speech synthesis if currently speaking
-      if ('speechSynthesis' in window) {
+      if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
       }
 
@@ -127,9 +146,11 @@ export const useAssistant = (language = 'en-US') => {
       const recognition = new SpeechRecognition();
       recognition.lang = language;
       recognition.continuous = false;
-      recognition.interimResults = false;
+      recognition.interimResults = true;
 
       let resolved = false;
+      let capturedText = '';
+
       const safeResolve = (value) => {
         if (!resolved) {
           resolved = true;
@@ -143,7 +164,7 @@ export const useAssistant = (language = 'en-US') => {
         if (!resolved) {
           console.warn('[useAssistant] Voice input timed out after 12s');
           try { recognition.stop(); } catch (e) {}
-          safeResolve('');
+          safeResolve(capturedText);
         }
       }, 12000);
 
@@ -153,9 +174,18 @@ export const useAssistant = (language = 'en-US') => {
       };
 
       recognition.onresult = (e) => {
-        const result = e.results[0][0]?.transcript?.trim().toLowerCase() || '';
-        console.log('[useAssistant] Voice Input Received:', result);
-        safeResolve(result);
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const transcriptPart = e.results[i][0]?.transcript || '';
+          if (e.results[i].isFinal) {
+            capturedText = transcriptPart.trim().toLowerCase();
+          } else if (!capturedText) {
+            capturedText = transcriptPart.trim().toLowerCase();
+          }
+        }
+        console.log('[useAssistant] Voice Input Received:', capturedText);
+        if (capturedText && e.results[e.results.length - 1].isFinal) {
+          safeResolve(capturedText);
+        }
       };
 
       recognition.onerror = (err) => {
@@ -168,13 +198,13 @@ export const useAssistant = (language = 'en-US') => {
         } else {
           console.error('[useAssistant] Speech Error:', err.error);
         }
-        safeResolve('');
+        safeResolve(capturedText);
       };
 
       recognition.onend = () => {
         if (!resolved) {
-          console.log('[useAssistant] Recognition ended with no result.');
-          safeResolve('');
+          console.log('[useAssistant] Recognition ended.', capturedText ? `Captured: ${capturedText}` : 'no result.');
+          safeResolve(capturedText);
         }
       };
 
