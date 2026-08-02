@@ -16,7 +16,7 @@ import {
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task';
 
-const DEBOUNCE_FRAMES = 3;
+const DEBOUNCE_FRAMES = 10;
 
 const ISLTranslatorCamera = () => {
   const webcamRef = useRef(null);
@@ -138,7 +138,14 @@ const ISLTranslatorCamera = () => {
         setVisionAnalysis(parsed);
         if (parsed.translation) setTranslatedSentence(parsed.translation);
         if (parsed.sign) {
-          setGlossSequence((prev) => [...prev, parsed.sign.toUpperCase()]);
+          const newSign = parsed.sign.toUpperCase();
+          setGlossSequence((prev) => {
+            if (prev[prev.length - 1] === newSign) return prev;
+            const updated = [...prev, newSign].slice(-8);
+            const formatted = formatISLSequenceToSentence(updated);
+            setTranslatedSentence(formatted);
+            return updated;
+          });
         }
       }
     } catch (err) {
@@ -202,7 +209,7 @@ const ISLTranslatorCamera = () => {
           if (frameCountRef.current >= DEBOUNCE_FRAMES) {
             setGlossSequence((prev) => {
               if (prev[prev.length - 1] !== detectedId) {
-                const updated = [...prev, detectedId];
+                const updated = [...prev, detectedId].slice(-8);
                 const formatted = formatISLSequenceToSentence(updated);
                 setTranslatedSentence(formatted);
                 return updated;

@@ -123,20 +123,34 @@ export const classifySingleFrameHand = (landmarks, gestures = null) => {
 export const formatISLSequenceToSentence = (glosses) => {
   if (!glosses || !glosses.length) return '';
 
-  const cleanGlosses = glosses.map((g) => g.toUpperCase().trim());
+  // Filter & deduplicate consecutive repeating glosses
+  const cleanGlosses = [];
+  glosses.forEach((g) => {
+    if (!g || typeof g !== 'string') return;
+    const clean = g.toUpperCase().trim();
+    if (!clean) return;
+    if (cleanGlosses.length === 0 || cleanGlosses[cleanGlosses.length - 1] !== clean) {
+      cleanGlosses.push(clean);
+    }
+  });
+
+  if (cleanGlosses.length === 0) return '';
+
+  // Limit sequence to last 8 unique signs to keep sentence clean and readable
+  const recentGlosses = cleanGlosses.slice(-8);
 
   // Check exact or partial grammar patterns
   for (const pattern of ISL_GRAMMAR_PATTERNS) {
     if (
-      pattern.glosses.length === cleanGlosses.length &&
-      pattern.glosses.every((val, idx) => val === cleanGlosses[idx])
+      pattern.glosses.length === recentGlosses.length &&
+      pattern.glosses.every((val, idx) => val === recentGlosses[idx])
     ) {
       return pattern.sentence;
     }
   }
 
   // Default fallback: concatenate labels intelligently
-  const words = cleanGlosses.map((id) => {
+  const words = recentGlosses.map((id) => {
     const item = ISL_VOCABULARY.find((v) => v.id === id);
     return item ? item.label.split('/')[0].trim() : id;
   });
