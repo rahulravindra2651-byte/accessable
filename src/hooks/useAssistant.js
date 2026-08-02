@@ -41,6 +41,9 @@ const getBestVoice = (language) => {
   });
 };
 
+// Module-level set to prevent Chrome V8 garbage collection of active utterances
+const activeUtterances = new Set();
+
 export const useAssistant = (language = 'en-US') => {
   const [isMicActive, setIsMicActive] = useState(false);
 
@@ -58,6 +61,9 @@ export const useAssistant = (language = 'en-US') => {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = language;
 
+      // Keep reference in Set to prevent Chrome GC from dropping utterance mid-speech
+      activeUtterances.add(utterance);
+
       // Wait for voices to be available (fixes Chrome/Edge async voice loading)
       const preferredVoice = await getBestVoice(language);
       if (preferredVoice) {
@@ -71,6 +77,7 @@ export const useAssistant = (language = 'en-US') => {
       const finish = () => {
         if (!done) {
           done = true;
+          activeUtterances.delete(utterance);
           clearTimeout(fallbackTimer);
           setTimeout(resolve, 300);
         }
@@ -80,7 +87,7 @@ export const useAssistant = (language = 'en-US') => {
       const fallbackTimer = setTimeout(() => {
         console.warn('[useAssistant] Speech synthesis fallback timer triggered');
         finish();
-      }, Math.max(3000, text.length * 85));
+      }, Math.max(2500, text.length * 80));
 
       utterance.onend = finish;
       utterance.onerror = (e) => {
@@ -156,6 +163,8 @@ export const useAssistant = (language = 'en-US') => {
           console.error('[useAssistant] Microphone permission denied. Please allow microphone access.');
         } else if (err.error === 'no-speech') {
           console.warn('[useAssistant] No speech detected.');
+        } else if (err.error === 'network') {
+          console.warn('[useAssistant] Speech recognition network error (Google Speech cloud service unavailable or offline).');
         } else {
           console.error('[useAssistant] Speech Error:', err.error);
         }
