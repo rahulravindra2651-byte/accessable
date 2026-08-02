@@ -113,8 +113,8 @@ export const classifySingleFrameHand = (landmarks, gestures = null) => {
     return { sign: getItem('FIVE'), confidence: 0.93 };
   }
 
-  // ── Default fallback for active hand ──
-  return { sign: getItem('HELLO'), confidence: 0.75 };
+  // Return null when no specific sign gesture matches (avoids false HELLO token spam)
+  return null;
 };
 
 /**

@@ -28,8 +28,8 @@ const ISLTranslatorCamera = () => {
   const lastTokenRef = useRef('');
   const frameCountRef = useRef(0);
 
-  // Engine selection: 'openai' | 'mediapipe'
-  const [engineMode, setEngineMode] = useState('openai');
+  // Engine selection: 'mediapipe' | 'openai'
+  const [engineMode, setEngineMode] = useState('mediapipe');
   const [signSystem, setSignSystem] = useState('ISL'); // ISL | ASL | BSL | AUTO
 
   const [modelState, setModelState] = useState('loading');
@@ -99,24 +99,46 @@ const ISLTranslatorCamera = () => {
     const imageSrc = webcamRef.current.getScreenshot();
     if (!imageSrc) return;
 
+    if (!openAiKey) {
+      console.warn('[OpenAI Vision] API key missing. Please click the Key button to configure your OpenAI API Key.');
+      return;
+    }
+
     setIsVisionLoading(true);
     try {
-      const res = await fetch('/api/gestures/analyze-vision', {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openAiKey}`
+        },
         body: JSON.stringify({
-          image: imageSrc,
-          apiKey: openAiKey,
-          signSystem: signSystem,
-        }),
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: `You are an expert ${signSystem} (Sign Language) interpreter. Analyze the image and output valid JSON: {"sign": "GESTURE_NAME", "label": "Meaning", "translation": "Translated Sentence", "explanation": "Brief description"}`
+            },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: `Recognize any ${signSystem} sign language gesture in this frame and translate it into natural text.` },
+                { type: 'image_url', image_url: { url: imageSrc } }
+              ]
+            }
+          ],
+          response_format: { type: 'json_object' },
+          max_tokens: 300
+        })
       });
-      const data = await res.json();
 
-      if (res.ok && data.success) {
-        setVisionAnalysis(data);
-        setTranslatedSentence(data.translation);
-        if (data.sign) {
-          setGlossSequence((prev) => [...prev, data.sign]);
+      const data = await res.json();
+      if (res.ok && data.choices?.[0]?.message?.content) {
+        const parsed = JSON.parse(data.choices[0].message.content);
+        setVisionAnalysis(parsed);
+        if (parsed.translation) setTranslatedSentence(parsed.translation);
+        if (parsed.sign) {
+          setGlossSequence((prev) => [...prev, parsed.sign.toUpperCase()]);
         }
       }
     } catch (err) {
