@@ -1,4 +1,5 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
+import { GoogleLogin } from '@react-oauth/google';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Accessibility, Languages, Mic, Volume2 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { AccessibilityContext } from '../../context/AccessibilityContext';
@@ -37,6 +38,7 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeListeningField, setActiveListeningField] = useState(null);
   // Guard: only one SpeechRecognition session at a time
@@ -66,7 +68,7 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
     setError('');
     setStep(2);
     speakGuidance(
-      'Step 2 of 2: Enter your details. Please fill in your name, email, and password, or use the voice input buttons.',
+      'Step 2 of 2: Enter your details, or use Continue with Google to register instantly.',
       'polite'
     );
   };
@@ -124,6 +126,7 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
     try { recognition.start(); } catch { setActiveListeningField(null); activeRecognitionRef.current = null; }
   };
 
+  /* ── Email/password submit ── */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -164,6 +167,41 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  /* ── Google OAuth register ── */
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setError('');
+    setIsGoogleLoading(true);
+    speakGuidance('Creating your account with Google, please wait.', 'polite');
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: credentialResponse.credential, role }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const msg = data.message || 'Google sign-up failed.';
+        setError(msg); speakGuidance(msg, 'assertive'); return;
+      }
+      speakGuidance(
+        `Account created successfully with Google. Welcome to AccessAble, ${data.user.name}.`,
+        'assertive'
+      );
+      login(data.user, data.token);
+    } catch {
+      const msg = 'Unable to connect to server. Please try again.';
+      setError(msg); speakGuidance(msg, 'assertive');
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleError = () => {
+    const msg = 'Google sign-up was cancelled or failed. Please try again.';
+    setError(msg);
+    speakGuidance(msg, 'assertive');
   };
 
   const selectedRole = ROLES.find((r) => r.id === role);
@@ -303,6 +341,48 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
                 </div>
               </div>
 
+              {/* ── Google Sign-Up ── */}
+              <div className="mb-5">
+                <p className="text-xs font-semibold mb-2.5 uppercase tracking-wider" style={{ color: 'var(--c-text-muted)' }}>
+                  Quick register
+                </p>
+                <div className="flex justify-center" role="group" aria-label="Register with Google">
+                  {isGoogleLoading ? (
+                    <div
+                      className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border-2 font-semibold text-sm"
+                      style={{ borderColor: 'var(--c-border)', color: 'var(--c-text-muted)' }}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <div className="w-4 h-4 border-2 border-indigo-400/40 border-t-indigo-500 rounded-full anim-spin" />
+                      Creating account…
+                    </div>
+                  ) : (
+                    <GoogleLogin
+                      onSuccess={handleGoogleSuccess}
+                      onError={handleGoogleError}
+                      useOneTap={false}
+                      text="signup_with"
+                      shape="rectangular"
+                      width="100%"
+                      theme="outline"
+                      size="large"
+                      logo_alignment="left"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* ── Divider ── */}
+              <div className="relative flex items-center gap-3 mb-5">
+                <div className="flex-1 h-px" style={{ background: 'var(--c-border)' }} />
+                <span className="text-xs font-semibold uppercase tracking-wider px-1" style={{ color: 'var(--c-text-subtle)' }}>
+                  or fill in details
+                </span>
+                <div className="flex-1 h-px" style={{ background: 'var(--c-border)' }} />
+              </div>
+
+              {/* ── Manual Form ── */}
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
 
                 {/* Full Name */}

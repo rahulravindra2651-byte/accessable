@@ -1,11 +1,16 @@
 const express = require('express');
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 const User    = require('../models/User');
 const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'accessable-secret';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+
+// Shared Google OAuth client instance
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 const signToken = (user) =>
   jwt.sign(
@@ -13,6 +18,82 @@ const signToken = (user) =>
     JWT_SECRET,
     { expiresIn: '7d' }
   );
+
+/* ─── Google OAuth ─── */
+router.post('/google', async (req, res) => {
+  const { credential, role } = req.body;
+
+  if (!credential) {
+    return res.status(400).json({ message: 'Google credential is required.' });
+  }
+
+  try {
+    // 1. Verify Google ID token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, name, picture } = payload;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Could not retrieve email from Google account.' });
+    }
+
+    // 2. Find user by googleId OR email (handles account linking)
+    let user = await User.findOne({ $or: [{ googleId }, { email: email.toLowerCase() }] });
+
+    if (user) {
+      // Existing user — update Google fields if needed and log in
+      if (!user.googleId) {
+        user.googleId = googleId;
+        user.picture  = picture || user.picture;
+        user.authProvider = 'google';
+        await user.save();
+      }
+      const token = signToken(user);
+      return res.json({
+        user: { id: user._id, name: user.name, email: user.email, role: user.role, picture: user.picture },
+        token,
+      });
+    }
+
+    // 3. New user — role is required to register
+    if (!role || !['regular', 'impaired'].includes(role)) {
+      return res.status(404).json({
+        message: 'No account found for this Google account. Please register and choose your account type first.',
+        needsRole: true,
+      });
+    }
+
+    // 4. Create new Google user
+    user = await User.create({
+      name,
+      email: email.toLowerCase(),
+      password: null,
+      role,
+      googleId,
+      picture: picture || null,
+      authProvider: 'google',
+    });
+
+    const token = signToken(user);
+    return res.status(201).json({
+      user: { id: user._id, name: user.name, email: user.email, role: user.role, picture: user.picture },
+      token,
+    });
+  } catch (err) {
+    console.error('[auth/google] Error:', err.message);
+    if (err.message?.includes('Token used too late') || err.message?.includes('Invalid token')) {
+      return res.status(401).json({ message: 'Google sign-in expired. Please try again.' });
+    }
+    if (err.name === 'MongooseServerSelectionError' || err.message?.includes('buffering timed out')) {
+      return res.status(503).json({ message: 'Database is not reachable.' });
+    }
+    res.status(500).json({ message: 'Google authentication failed. Please try again.' });
+  }
+});
+
 
 /* ─── Register ─── */
 router.post('/register', async (req, res) => {

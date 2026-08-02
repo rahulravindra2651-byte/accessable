@@ -1,4 +1,5 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
+import { GoogleLogin } from '@react-oauth/google';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Mic, Volume2 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { AccessibilityContext } from '../../context/AccessibilityContext';
@@ -11,6 +12,7 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeListeningField, setActiveListeningField] = useState(null);
   // Guard: only one SpeechRecognition session at a time
@@ -18,11 +20,12 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
 
   useEffect(() => {
     speakGuidance(
-      'Welcome to AccessAble. You are on the Sign In page. Enter your email and password to access your dashboard.',
+      'Welcome to AccessAble. You are on the Sign In page. Enter your email and password, or use Continue with Google.',
       'polite'
     );
   }, [speakGuidance]);
 
+  /* ── Voice input for fields ── */
   const listenForField = (fieldName, setter) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
@@ -76,6 +79,7 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
     try { recognition.start(); } catch { setActiveListeningField(null); activeRecognitionRef.current = null; }
   };
 
+  /* ── Email/password submit ── */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -108,6 +112,43 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  /* ── Google OAuth success ── */
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setError('');
+    setIsGoogleLoading(true);
+    speakGuidance('Verifying your Google account, please wait.', 'polite');
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: credentialResponse.credential }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const msg = data.needsRole
+          ? 'No AccessAble account found for this Google account. Please register and choose your account type first.'
+          : data.message || 'Google sign-in failed.';
+        setError(msg);
+        speakGuidance(msg, 'assertive');
+        return;
+      }
+      speakGuidance(`Google sign-in successful. Welcome back ${data.user.name}.`, 'assertive');
+      login(data.user, data.token);
+    } catch {
+      const msg = 'Unable to connect to server. Please try again.';
+      setError(msg); speakGuidance(msg, 'assertive');
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  };
+
+  /* ── Google OAuth error ── */
+  const handleGoogleError = () => {
+    const msg = 'Google sign-in was cancelled or failed. Please try again.';
+    setError(msg);
+    speakGuidance(msg, 'assertive');
   };
 
   return (
@@ -145,7 +186,7 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
             </div>
             <button
               type="button"
-              onClick={() => speakGuidance('Sign In form. Enter email address and password, or use the voice input buttons next to each field.', 'assertive')}
+              onClick={() => speakGuidance('Sign In form. Enter email address and password, or use Continue with Google.', 'assertive')}
               className="btn btn-ghost btn-sm gap-1"
               aria-label="Read form guidance aloud"
             >
@@ -153,6 +194,49 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
             </button>
           </div>
 
+          {/* ── Google Sign-In ── */}
+          <div className="mb-5">
+            <div
+              className="flex justify-center"
+              role="group"
+              aria-label="Sign in with Google"
+            >
+              {isGoogleLoading ? (
+                <div
+                  className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border-2 font-semibold text-sm"
+                  style={{ borderColor: 'var(--c-border)', color: 'var(--c-text-muted)' }}
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div className="w-4 h-4 border-2 border-indigo-400/40 border-t-indigo-500 rounded-full anim-spin" />
+                  Verifying with Google…
+                </div>
+              ) : (
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={handleGoogleError}
+                  useOneTap={false}
+                  text="signin_with"
+                  shape="rectangular"
+                  width="100%"
+                  theme="outline"
+                  size="large"
+                  logo_alignment="left"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* ── Divider ── */}
+          <div className="relative flex items-center gap-3 mb-5">
+            <div className="flex-1 h-px" style={{ background: 'var(--c-border)' }} />
+            <span className="text-xs font-semibold uppercase tracking-wider px-1" style={{ color: 'var(--c-text-subtle)' }}>
+              or sign in with email
+            </span>
+            <div className="flex-1 h-px" style={{ background: 'var(--c-border)' }} />
+          </div>
+
+          {/* ── Email/Password Form ── */}
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
 
             {/* Email */}
