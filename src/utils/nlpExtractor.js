@@ -28,6 +28,7 @@ const PATTERNS = [
   // Name
   { field: 'name',        regex: /my (?:full\s+)?name is (.+)/i },
   { field: 'name',        regex: /(?:call me|i am called) (.+)/i },
+  { field: 'name',        regex: /^name is (.+)/i },
 
   // Email
   { field: 'email',       regex: /my email(?: address)? is (.+)/i },
@@ -71,6 +72,47 @@ const PATTERNS = [
 ];
 
 /**
+ * Clean up spoken values based on the field type.
+ * e.g., email "rahul at gmail dot com" -> "rahul@gmail.com"
+ * e.g., phone "9 8 7 6 5 4 3 2 1 0" -> "9876543210"
+ */
+export const cleanSpokenValue = (field, rawText) => {
+  if (!rawText) return '';
+  let text = rawText.trim();
+  const lowerField = (field || '').toLowerCase();
+
+  if (lowerField.includes('email')) {
+    return text
+      .toLowerCase()
+      .replace(/\s+at\s+/g, '@')
+      .replace(/\s+dot\s+/g, '.')
+      .replace(/\s+/g, '');
+  }
+
+  if (lowerField.includes('phone') || lowerField.includes('mobile') || lowerField.includes('contact')) {
+    const digits = text.replace(/\D/g, '');
+    return digits || text;
+  }
+
+  if (lowerField.includes('age') || lowerField.includes('pincode') || lowerField.includes('zip') || lowerField.includes('pin')) {
+    const digits = text.match(/\d+/g);
+    if (digits) return digits.join('');
+  }
+
+  if (lowerField.includes('gender')) {
+    if (/\b(male|man|boy)\b/i.test(text)) return 'Male';
+    if (/\b(female|woman|girl)\b/i.test(text)) return 'Female';
+    if (/\b(other|non.binary|transgender)\b/i.test(text)) return 'Other';
+  }
+
+  // Capitalize title case for names, cities, states, addresses
+  return text
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+/**
  * Attempt to extract a field-value pair from a spoken sentence.
  * @param {string} transcript — raw speech recognition result
  * @returns {{ field: string, value: string } | null}
@@ -82,9 +124,9 @@ export const extractFieldFromSpeech = (transcript) => {
   for (const { field, regex } of PATTERNS) {
     const match = text.match(regex);
     if (match && match[1]) {
-      const value = match[1].trim().replace(/\s+/g, ' ');
-      if (value.length > 0) {
-        return { field, value };
+      const rawValue = match[1].trim().replace(/\s+/g, ' ');
+      if (rawValue.length > 0) {
+        return { field, value: cleanSpokenValue(field, rawValue) };
       }
     }
   }

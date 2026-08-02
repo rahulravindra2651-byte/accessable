@@ -46,7 +46,15 @@ export const useAssistant = (language = 'en-US') => {
 
   const speak = async (text) => {
     return new Promise(async (resolve) => {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        return resolve();
+      }
+
       window.speechSynthesis.cancel();
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = language;
 
@@ -59,23 +67,55 @@ export const useAssistant = (language = 'en-US') => {
         console.warn(`No suitable voice found for ${language}, using browser default`);
       }
 
-      utterance.onend = () => setTimeout(resolve, 500);
+      let done = false;
+      const finish = () => {
+        if (!done) {
+          done = true;
+          clearTimeout(fallbackTimer);
+          setTimeout(resolve, 300);
+        }
+      };
+
+      // Fallback timer: Chromium speechSynthesis onend event sometimes fails to fire
+      const fallbackTimer = setTimeout(() => {
+        console.warn('[useAssistant] Speech synthesis fallback timer triggered');
+        finish();
+      }, Math.max(3000, text.length * 85));
+
+      utterance.onend = finish;
       utterance.onerror = (e) => {
         if (e.error !== 'interrupted') console.warn('[useAssistant] speak error:', e.error);
-        resolve();
+        finish();
       };
-      window.speechSynthesis.speak(utterance);
+
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.error('[useAssistant] speak exception:', err);
+        finish();
+      }
     });
   };
 
   const listen = () => {
     return new Promise((resolve) => {
+      if (typeof window === 'undefined') {
+        return resolve('');
+      }
+
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
       if (!SpeechRecognition) {
         console.error('Speech Recognition NOT supported in this browser.');
         return resolve('');
       }
+
+      // Stop speech synthesis if currently speaking
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+
+      setIsMicActive(true);
 
       const recognition = new SpeechRecognition();
       recognition.lang = language;
@@ -106,7 +146,7 @@ export const useAssistant = (language = 'en-US') => {
       };
 
       recognition.onresult = (e) => {
-        const result = e.results[0][0]?.transcript?.toLowerCase() || '';
+        const result = e.results[0][0]?.transcript?.trim().toLowerCase() || '';
         console.log('[useAssistant] Voice Input Received:', result);
         safeResolve(result);
       };
@@ -114,7 +154,6 @@ export const useAssistant = (language = 'en-US') => {
       recognition.onerror = (err) => {
         if (err.error === 'not-allowed') {
           console.error('[useAssistant] Microphone permission denied. Please allow microphone access.');
-          setIsMicActive(false);
         } else if (err.error === 'no-speech') {
           console.warn('[useAssistant] No speech detected.');
         } else {

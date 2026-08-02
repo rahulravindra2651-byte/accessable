@@ -8,7 +8,7 @@ const FREE_FIELDS = [
 import { useAssistant } from '../../hooks/useAssistant';
 import { useOCR } from '../../hooks/useOCR';
 import { extractFormFields } from '../../utils/formProcessor';
-import { extractFieldFromSpeech, humaniseField } from '../../utils/nlpExtractor';
+import { extractFieldFromSpeech, humaniseField, cleanSpokenValue } from '../../utils/nlpExtractor';
 import { LANGUAGES, getOCRLang } from '../../utils/languages';
 import { AccessibilityContext } from '../../context/AccessibilityContext';
 import FormReader from './FormReader';
@@ -36,10 +36,14 @@ const VoiceForm = () => {
   const [nlpFields, setNlpFields] = useState({});
   const [nlpListening, setNlpListening] = useState(false);
   const [nlpResult, setNlpResult] = useState(null);
-
+  const [activeSingleField, setActiveSingleField] = useState(null);
 
   // Guard to prevent concurrent conversational loops
   const isRunningRef = useRef(false);
+
+  /* ── Affirmation regex helpers ── */
+  const IS_AFFIRMATIVE = /\b(yes|yeah|yep|yup|sure|ok|okay|correct|right|proceed|start|confirm|affirmative|haan|ha|go ahead|do it|positive)\b/i;
+  const IS_NEGATIVE = /\b(no|nope|not|wrong|incorrect|cancel|stop|dont|don't)\b/i;
 
   /* ── Browser check & spoken guidance on mount ── */
   useEffect(() => {
@@ -122,7 +126,7 @@ const VoiceForm = () => {
         `Form scanned successfully. Found ${fields.length} fields: ${fields.join(', ')}. Shall we start filling them? Say yes or no.`
       );
       const response = await listen();
-      if (response?.toLowerCase().match(/\b(yes|yeah|sure|ok|proceed|start)\b/)) {
+      if (IS_AFFIRMATIVE.test(response || '')) {
         await speak('Starting voice form assistant.');
         setStatus('FILLING');
         runConversationalLoop(0);
@@ -151,23 +155,24 @@ const VoiceForm = () => {
     // 2. Assistant listens
     const input = await listen();
     if (!input?.trim()) {
-      await speak("I didn't catch anything. Let's try again.");
+      await speak("I didn't catch anything. Let me ask again.");
       return runConversationalLoop(index);
     }
 
-    // 3. NLP extraction fallback
+    // 3. NLP extraction & formatting fallback
     const extracted = extractFieldFromSpeech(input);
-    const valueToUse = extracted?.value || input.trim();
+    const rawVal = extracted?.value || input.trim();
+    const valueToUse = cleanSpokenValue(label, rawVal);
 
     // 4. Conversational confirmation
     await speak(`You said: ${valueToUse} for ${label}. Is this correct? Say yes or no.`);
     const confirm = await listen();
 
-    if (confirm?.toLowerCase().match(/\b(yes|yeah|correct|right|ok|sure)\b/)) {
+    if (IS_AFFIRMATIVE.test(confirm || '')) {
       setFormData((prev) => ({ ...prev, [label]: valueToUse }));
       await speak(`${label} entered successfully.`);
       runConversationalLoop(index + 1);
-    } else if (confirm?.toLowerCase().match(/\b(no|not|wrong|incorrect)\b/)) {
+    } else if (IS_NEGATIVE.test(confirm || '')) {
       await speak("Okay, let's try entering this field again.");
       runConversationalLoop(index);
     } else {
@@ -177,7 +182,7 @@ const VoiceForm = () => {
   };
 
   /* ─────────────────────────────────
-     FREE MODE — Conversational NLP Fill
+     FREE MODE — Conversational NLP Fill & Single Field Voice Input
   ───────────────────────────────── */
   const handleFreeVoice = async () => {
     if (nlpListening) return;
@@ -187,7 +192,7 @@ const VoiceForm = () => {
     setNlpListening(false);
 
     if (!transcript?.trim()) {
-      await speak("I didn't hear anything. Please try again.");
+      await speak("I didn't hear anything. Please try again or tap a field microphone button.");
       return;
     }
 
@@ -199,7 +204,7 @@ const VoiceForm = () => {
       );
       const confirm = await listen();
 
-      if (confirm?.toLowerCase().match(/\b(yes|yeah|correct|right|ok)\b/)) {
+      if (IS_AFFIRMATIVE.test(confirm || '')) {
         setNlpResult(extracted);
         setNlpFields((prev) => ({ ...prev, [extracted.field]: extracted.value }));
         await speak(`${humaniseField(extracted.field)} updated to ${extracted.value}.`);
@@ -209,10 +214,29 @@ const VoiceForm = () => {
       }
     } else {
       await speak(
-        "I couldn't recognize a specific field. Try saying: My name is Rahul, or My email is rahul at gmail dot com."
+        "I couldn't recognize a specific field sentence. You can also tap the mic icon next to any input field to dictate directly."
       );
       setNlpResult(null);
     }
+  };
+
+  const handleSingleFieldVoice = async (field) => {
+    if (activeSingleField) return;
+    setActiveSingleField(field);
+    const fieldLabel = humaniseField(field);
+    await speak(`Please speak your ${fieldLabel}.`);
+    const transcript = await listen();
+    setActiveSingleField(null);
+
+    if (!transcript?.trim()) {
+      await speak(`Could not hear ${fieldLabel}. Please try again.`);
+      return;
+    }
+
+    const cleanedValue = cleanSpokenValue(field, transcript);
+    setNlpFields((prev) => ({ ...prev, [field]: cleanedValue }));
+    setNlpResult({ field, value: cleanedValue });
+    await speak(`${fieldLabel} entered as ${cleanedValue}.`);
   };
 
   const handleFreeManual = (field, value) =>
@@ -520,22 +544,42 @@ const VoiceForm = () => {
 
             {/* Editable Field Inputs */}
             <div className="space-y-3">
-              {FREE_FIELDS.map((f) => (
-                <div key={f}>
-                  <label htmlFor={`free-${f}`} className="label text-xs font-semibold">
-                    {humaniseField(f)}
-                  </label>
-                  <input
-                    id={`free-${f}`}
-                    type="text"
-                    value={nlpFields[f] || ''}
-                    onChange={(e) => handleFreeManual(f, e.target.value)}
-                    onFocus={() => speakGuidance(`${humaniseField(f)} edit box. Value: ${nlpFields[f] || 'Empty'}.`, 'polite')}
-                    className="input-field text-sm py-2"
-                    placeholder={`Say: My ${f} is…`}
-                  />
-                </div>
-              ))}
+              {FREE_FIELDS.map((f) => {
+                const isFieldActive = activeSingleField === f;
+                return (
+                  <div key={f}>
+                    <label htmlFor={`free-${f}`} className="label text-xs font-semibold flex items-center justify-between">
+                      <span>{humaniseField(f)}</span>
+                      {isFieldActive && (
+                        <span className="text-amber-500 font-bold animate-pulse text-[11px] flex items-center gap-1">
+                          <Mic size={10} /> Listening…
+                        </span>
+                      )}
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        id={`free-${f}`}
+                        type="text"
+                        value={nlpFields[f] || ''}
+                        onChange={(e) => handleFreeManual(f, e.target.value)}
+                        onFocus={() => speakGuidance(`${humaniseField(f)} edit box. Value: ${nlpFields[f] || 'Empty'}.`, 'polite')}
+                        className="input-field text-sm py-2 flex-1"
+                        placeholder={`Say: My ${f} is… or tap mic`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSingleFieldVoice(f)}
+                        disabled={!browserSupported || activeSingleField !== null || nlpListening}
+                        className={`btn btn-sm ${isFieldActive ? 'btn-danger' : 'btn-secondary'}`}
+                        aria-label={`Dictate ${humaniseField(f)} by voice`}
+                        title={`Speak into ${humaniseField(f)}`}
+                      >
+                        <Mic size={16} className={isFieldActive ? 'animate-pulse' : ''} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {Object.keys(nlpFields).some((k) => nlpFields[k]) && (

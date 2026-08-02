@@ -11,14 +11,13 @@ const SignIn = ({ onSignIn, user }) => {
     speak(greeting);
 
     // Auto-listen for voice commands
-    const timer = setTimeout(() => {
-      listen((cmd) => {
-        if (cmd.includes("assistant") || cmd.includes("impaired") || cmd.includes("sensory")) {
-          onSignIn('impaired');
-        } else if (cmd.includes("translator") || cmd.includes("regular")) {
-          onSignIn('regular');
-        }
-      });
+    const timer = setTimeout(async () => {
+      const cmd = await listen();
+      if (cmd && (cmd.includes("assistant") || cmd.includes("impaired") || cmd.includes("sensory"))) {
+        onSignIn('impaired');
+      } else if (cmd && (cmd.includes("translator") || cmd.includes("regular"))) {
+        onSignIn('regular');
+      }
     }, 8000);
 
     return () => clearTimeout(timer);
