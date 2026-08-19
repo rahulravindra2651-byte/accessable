@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
-import { Eye, EyeOff, Mail, Lock, ArrowRight, Mic, Volume2 } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, ArrowRight, Mic, Volume2, Sparkles } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { AccessibilityContext } from '../../context/AccessibilityContext';
 
@@ -15,7 +15,6 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeListeningField, setActiveListeningField] = useState(null);
-  // Guard: only one SpeechRecognition session at a time
   const activeRecognitionRef = useRef(null);
 
   useEffect(() => {
@@ -33,7 +32,6 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
       speakGuidance('Speech recognition is not supported in this browser.', 'assertive');
       return;
     }
-    // Abort any existing session first
     if (activeRecognitionRef.current) {
       try { activeRecognitionRef.current.abort(); } catch {}
       activeRecognitionRef.current = null;
@@ -144,7 +142,6 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
     }
   };
 
-  /* ── Google OAuth error ── */
   const handleGoogleError = () => {
     const msg = 'Google sign-in was cancelled or failed. Please try again.';
     setError(msg);
@@ -152,42 +149,59 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'linear-gradient(135deg, #eef2ff 0%, #f8faff 50%, #f5f3ff 100%)' }}
-    >
+    <div className="clay-canvas min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      {/* 3D Floating Blobs */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10" aria-hidden="true">
+        <div className="absolute -top-[10%] -left-[10%] w-[50vw] h-[50vw] rounded-full bg-[#7C3AED]/12 blur-3xl clay-blob-float" />
+        <div className="absolute -bottom-[10%] -right-[10%] w-[50vw] h-[50vw] rounded-full bg-[#DB2777]/12 blur-3xl clay-blob-float-delayed" />
+      </div>
+
       <a href="#login-form" className="skip-link">Skip to sign in form</a>
 
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md my-8 relative z-10">
         {/* Brand */}
         <div className="text-center mb-8">
           <div
-            className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4"
-            style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
+            className="inline-flex items-center justify-center w-16 h-16 rounded-[22px] bg-gradient-to-br from-[#A78BFA] to-[#7C3AED] shadow-clayOrb mb-4 text-white font-black text-2xl"
+            style={{ fontFamily: 'Nunito, sans-serif' }}
             aria-hidden="true"
           >
-            <span className="text-white text-2xl font-black">A</span>
+            A
           </div>
-          <h1 className="text-3xl font-black" style={{ color: '#1e293b' }}>AccessAble</h1>
-          <p className="text-sm mt-1" style={{ color: '#64748b' }}>Inclusive communication for everyone</p>
+          <h1
+            className="clay-font-black text-4xl text-[#332F3A] tracking-tight"
+            style={{ fontFamily: 'Nunito, sans-serif' }}
+          >
+            AccessAble
+          </h1>
+          <p className="clay-font-body text-base text-[#635F69] mt-1 font-medium">
+            Tactile, inclusive communication for everyone
+          </p>
         </div>
 
         <div
-          className="card p-8"
+          className="clay-card p-8 sm:p-10"
           id="login-form"
           tabIndex="-1"
-          style={{ boxShadow: '0 8px 40px rgb(79 70 229 / .10)' }}
+          style={{ borderRadius: '36px' }}
         >
           {/* Form Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-8">
             <div>
-              <h2 className="text-2xl font-bold" style={{ color: 'var(--c-text)' }}>Welcome Back</h2>
-              <p className="text-sm mt-0.5" style={{ color: 'var(--c-text-muted)' }}>Sign in to your account</p>
+              <h2
+                className="clay-font-black text-2xl sm:text-3xl text-[#332F3A]"
+                style={{ fontFamily: 'Nunito, sans-serif' }}
+              >
+                Welcome Back
+              </h2>
+              <p className="clay-font-body text-sm text-[#635F69] mt-0.5">
+                Sign in to your workstation
+              </p>
             </div>
             <button
               type="button"
               onClick={() => speakGuidance('Sign In form. Enter email address and password, or use Continue with Google.', 'assertive')}
-              className="btn btn-ghost btn-sm gap-1"
+              className="clay-pill text-xs py-1.5 px-3 flex items-center gap-1.5 text-[#7C3AED]"
               aria-label="Read form guidance aloud"
             >
               <Volume2 size={15} /> Listen
@@ -195,112 +209,108 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
           </div>
 
           {/* ── Google Sign-In ── */}
-          <div className="mb-5">
-            <div
-              className="flex justify-center"
-              role="group"
-              aria-label="Sign in with Google"
-            >
+          <div className="mb-6">
+            <div className="flex justify-center" role="group" aria-label="Sign in with Google">
               {isGoogleLoading ? (
                 <div
-                  className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border-2 font-semibold text-sm"
-                  style={{ borderColor: 'var(--c-border)', color: 'var(--c-text-muted)' }}
+                  className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl bg-white shadow-clayPill text-sm font-bold text-[#635F69]"
                   role="status"
                   aria-live="polite"
                 >
-                  <div className="w-4 h-4 border-2 border-indigo-400/40 border-t-indigo-500 rounded-full anim-spin" />
+                  <div className="w-4 h-4 border-2 border-purple-400 border-t-[#7C3AED] rounded-full anim-spin" />
                   Verifying with Google…
                 </div>
               ) : (
-                <GoogleLogin
-                  onSuccess={handleGoogleSuccess}
-                  onError={handleGoogleError}
-                  useOneTap={false}
-                  text="signin_with"
-                  shape="rectangular"
-                  width="100%"
-                  theme="outline"
-                  size="large"
-                  logo_alignment="left"
-                />
+                <div className="w-full flex justify-center shadow-clayPill rounded-2xl overflow-hidden p-1 bg-white">
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
+                    useOneTap={false}
+                    text="signin_with"
+                    shape="rectangular"
+                    width="100%"
+                    theme="outline"
+                    size="large"
+                    logo_alignment="left"
+                  />
+                </div>
               )}
             </div>
           </div>
 
           {/* ── Divider ── */}
-          <div className="relative flex items-center gap-3 mb-5">
-            <div className="flex-1 h-px" style={{ background: 'var(--c-border)' }} />
-            <span className="text-xs font-semibold uppercase tracking-wider px-1" style={{ color: 'var(--c-text-subtle)' }}>
-              or sign in with email
+          <div className="relative flex items-center gap-3 mb-6">
+            <div className="flex-1 h-px bg-[#d9d4e3]" />
+            <span className="text-xs font-bold uppercase tracking-wider text-[#635F69] px-2">
+              or with email
             </span>
-            <div className="flex-1 h-px" style={{ background: 'var(--c-border)' }} />
+            <div className="flex-1 h-px bg-[#d9d4e3]" />
           </div>
 
           {/* ── Email/Password Form ── */}
-          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-
-            {/* Email */}
-            <div className="form-field">
-              <div className="form-field-header">
-                <label htmlFor="login-email" className="label">
-                  Email Address <span style={{ color: '#ef4444' }}>*</span>
+          <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+            {/* Email Field */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="login-email" className="clay-font-heading text-sm font-extrabold text-[#332F3A]">
+                  Email Address <span className="text-[#DB2777]">*</span>
                 </label>
                 <button
                   type="button"
                   onClick={() => listenForField('email', setEmail)}
-                  className={`btn btn-xs gap-1 ${activeListeningField === 'email' ? 'btn-danger' : 'btn-secondary'}`}
+                  className={`clay-pill text-xs py-1 px-2.5 flex items-center gap-1 ${
+                    activeListeningField === 'email' ? 'bg-[#DB2777] text-white' : 'text-[#7C3AED]'
+                  }`}
                   aria-label="Speak email address"
                 >
-                  <Mic size={11} className={activeListeningField === 'email' ? 'animate-pulse' : ''} />
+                  <Mic size={12} className={activeListeningField === 'email' ? 'animate-pulse' : ''} />
                   {activeListeningField === 'email' ? 'Listening…' : 'Speak'}
                 </button>
               </div>
               <div className="relative">
-                <Mail className="input-icon" size={16} aria-hidden="true" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[#635F69]" size={18} aria-hidden="true" />
                 <input
                   id="login-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   onFocus={() => speakGuidance('Email address edit box. Required.', 'polite')}
-                  className="input-field pl-9"
+                  className="clay-input pl-11"
                   placeholder="you@example.com"
                   autoComplete="email"
                   required
                   aria-required="true"
-                  aria-describedby="login-email-desc"
                 />
-                <span id="login-email-desc" className="sr-only">
-                  Enter your registered email address or use the Speak button.
-                </span>
               </div>
             </div>
 
-            {/* Password */}
-            <div className="form-field">
-              <div className="form-field-header">
-                <label htmlFor="login-password" className="label">
-                  Password <span style={{ color: '#ef4444' }}>*</span>
+            {/* Password Field */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="login-password" className="clay-font-heading text-sm font-extrabold text-[#332F3A]">
+                  Password <span className="text-[#DB2777]">*</span>
                 </label>
                 <button
                   type="button"
                   onClick={() => listenForField('password', setPassword)}
-                  className={`btn btn-xs gap-1 ${activeListeningField === 'password' ? 'btn-danger' : 'btn-secondary'}`}
+                  className={`clay-pill text-xs py-1 px-2.5 flex items-center gap-1 ${
+                    activeListeningField === 'password' ? 'bg-[#DB2777] text-white' : 'text-[#7C3AED]'
+                  }`}
                   aria-label="Speak password"
                 >
-                  <Mic size={11} className={activeListeningField === 'password' ? 'animate-pulse' : ''} />
+                  <Mic size={12} className={activeListeningField === 'password' ? 'animate-pulse' : ''} />
                   {activeListeningField === 'password' ? 'Listening…' : 'Speak'}
                 </button>
               </div>
               <div className="relative">
-                <Lock className="input-icon" size={16} aria-hidden="true" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#635F69]" size={18} aria-hidden="true" />
                 <input
                   id="login-password"
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onFocus={() => speakGuidance('Password edit box. Required.', 'polite')}
-                  className="input-field pl-9 pr-11"
+                  className="clay-input pl-11 pr-12"
                   placeholder="Enter your password"
                   autoComplete="current-password"
                   required
@@ -309,44 +319,46 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
                 <button
                   type="button"
                   onClick={() => setShowPw((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                  style={{ color: 'var(--c-text-subtle)', lineHeight: 0, background: 'none', border: 'none', cursor: 'pointer' }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#635F69] hover:text-[#7C3AED] transition-colors p-1"
                   aria-label={showPw ? 'Hide password' : 'Show password'}
                 >
-                  {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
+                  {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
             {error && (
-              <div role="alert" aria-live="assertive" className="form-error">
+              <div role="alert" aria-live="assertive" className="clay-pill bg-rose-50 text-[#DB2777] w-full text-sm font-bold p-3 rounded-2xl justify-center">
                 {error}
               </div>
             )}
 
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={isLoading}
-              className="btn btn-primary w-full btn-lg"
+              className="clay-btn w-full text-lg py-3.5 rounded-[22px]"
               aria-label="Sign in to your AccessAble account"
             >
               {isLoading ? (
                 <>
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full anim-spin" />
+                  <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full anim-spin" />
                   Signing In…
                 </>
               ) : (
-                <>Sign In <ArrowRight size={18} /></>
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight size={18} strokeWidth={3} />
+                </>
               )}
             </button>
           </form>
 
-          <p className="text-center text-sm mt-6" style={{ color: 'var(--c-text-muted)' }}>
+          <p className="text-center text-sm mt-7 text-[#635F69] font-medium">
             Don't have an account?{' '}
             <button
               onClick={onSwitchToRegister}
-              className="font-semibold"
-              style={{ color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer' }}
+              className="font-extrabold text-[#7C3AED] hover:underline cursor-pointer bg-transparent border-0 p-0"
               aria-label="Go to registration page"
             >
               Sign up
@@ -355,14 +367,13 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
         </div>
 
         {onBackToLanding && (
-          <p className="text-center mt-4">
+          <p className="text-center mt-6">
             <button
               onClick={onBackToLanding}
-              className="text-sm"
-              style={{ color: 'var(--c-text-subtle)', background: 'none', border: 'none', cursor: 'pointer' }}
+              className="clay-pill text-sm font-bold text-[#635F69] hover:text-[#7C3AED] cursor-pointer"
               aria-label="Back to home page"
             >
-              ← Back to home
+              ← Back to Home
             </button>
           </p>
         )}

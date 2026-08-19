@@ -24,37 +24,44 @@ const Navbar = () => {
   const isImpaired = user?.role === 'impaired';
 
   return (
-    <header
-      className={`sticky top-0 z-50 border-b ${isImpaired
-          ? 'bg-black border-amber-500/30'
-          : 'bg-white/90 backdrop-blur-xl border-slate-200'
-        }`}
-      role="banner"
-    >
+    <header className="sticky top-4 z-50 max-w-7xl mx-auto px-4" role="banner">
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
 
-      <div className="container-app h-16 flex items-center justify-between gap-4">
+      <div
+        className={`clay-card px-5 sm:px-8 py-3.5 flex items-center justify-between gap-4 ${
+          isImpaired ? 'bg-black/90 text-amber-300 border-2 border-amber-400/40' : 'bg-white/80'
+        }`}
+        style={{ borderRadius: '36px' }}
+      >
         {/* Brand / Logo */}
-        <div className="flex items-center gap-2.5 flex-shrink-0">
+        <div className="flex items-center gap-3 flex-shrink-0">
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
+            className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-clayOrb font-black text-xl text-white ${
+              isImpaired
+                ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-black'
+                : 'bg-gradient-to-br from-[#A78BFA] to-[#7C3AED]'
+            }`}
+            style={{ fontFamily: 'Nunito, sans-serif' }}
             aria-hidden="true"
           >
-            <span className="text-white font-black text-base">A</span>
+            A
           </div>
           <div>
             <span
-              className={`text-base font-black tracking-tight ${isImpaired ? 'text-amber-400' : 'text-slate-900'
-                }`}
+              className={`text-xl font-black tracking-tight ${
+                isImpaired ? 'text-amber-400' : 'text-[#332F3A]'
+              }`}
+              style={{ fontFamily: 'Nunito, sans-serif' }}
             >
               AccessAble
             </span>
             <span
-              className={`ml-2 badge text-xs ${isImpaired ? 'badge-warning' : 'badge-primary'
-                }`}
+              className={`ml-2.5 clay-pill text-xs font-bold ${
+                isImpaired ? 'bg-amber-400 text-black shadow-none' : 'text-[#7C3AED] bg-purple-50'
+              }`}
+              style={{ padding: '2px 10px' }}
               aria-label={`Role: ${isImpaired ? 'Sensory Impaired Mode' : 'Regular Mode'}`}
             >
               {isImpaired ? 'Impaired Mode' : 'Regular Mode'}
@@ -65,7 +72,7 @@ const Navbar = () => {
         {/* Controls */}
         <div className="flex items-center gap-2">
           {/* Quick Accessibility Controls (Desktop) */}
-          <div className="hidden lg:flex items-center gap-1">
+          <div className="hidden lg:flex items-center gap-2">
             {/* Spoken Voice Guidance Prompt Toggle */}
             <button
               onClick={() => {
@@ -75,8 +82,13 @@ const Navbar = () => {
                   'assertive'
                 );
               }}
-              className={`btn btn-ghost btn-icon ${voiceGuidance ? (isImpaired ? 'text-amber-400' : 'text-indigo-600') : ''
-                }`}
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${
+                voiceGuidance
+                  ? isImpaired
+                    ? 'bg-amber-400 text-black shadow-clayOrb'
+                    : 'bg-[#7C3AED] text-white shadow-clayButton'
+                  : 'bg-white text-[#635F69] shadow-clayPill hover:-translate-y-1'
+              } active:scale-90`}
               aria-label={
                 voiceGuidance
                   ? 'Disable audio voice prompts'
@@ -97,12 +109,13 @@ const Navbar = () => {
                   startVoiceNav();
                 }
               }}
-              className={`btn btn-ghost btn-icon ${isListeningNav
-                  ? 'text-red-500 animate-pulse'
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${
+                isListeningNav
+                  ? 'bg-[#DB2777] text-white animate-pulse shadow-clayOrb'
                   : isImpaired
-                    ? 'text-amber-400'
-                    : ''
-                }`}
+                  ? 'bg-amber-400/20 text-amber-400 shadow-clayPill'
+                  : 'bg-white text-[#635F69] shadow-clayPill hover:-translate-y-1'
+              } active:scale-90`}
               aria-label={
                 isListeningNav
                   ? 'Stop voice navigation listener'
@@ -116,15 +129,14 @@ const Navbar = () => {
 
             {/* Read Page Aloud Trigger */}
             <button
-              onClick={() => {
-                readPageContent();
-              }}
-              className={`btn btn-ghost btn-icon ${isImpaired ? 'text-amber-400 hover:text-amber-300' : ''
-                }`}
+              onClick={readPageContent}
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-xs bg-white text-[#635F69] shadow-clayPill hover:-translate-y-1 active:scale-90 ${
+                isImpaired ? 'text-amber-400 hover:text-amber-300' : ''
+              }`}
               aria-label="Read current page content aloud"
               title="Read Page Aloud"
             >
-              <span className="font-bold text-xs">TTS</span>
+              TTS
             </button>
 
             {/* Dark / Light Theme Toggle */}
@@ -133,8 +145,9 @@ const Navbar = () => {
                 toggleTheme();
                 speakGuidance('Toggled color theme', 'polite');
               }}
-              className={`btn btn-ghost btn-icon ${isImpaired ? 'text-amber-400 hover:text-amber-300' : ''
-                }`}
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center bg-white text-[#635F69] shadow-clayPill hover:-translate-y-1 active:scale-90 ${
+                isImpaired ? 'text-amber-400 hover:text-amber-300' : ''
+              }`}
               aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
               title={isDark ? 'Light mode' : 'Dark mode'}
             >
@@ -147,8 +160,11 @@ const Navbar = () => {
                 setHighContrast((v) => !v);
                 speakGuidance('Toggled high contrast mode', 'polite');
               }}
-              className={`btn btn-ghost btn-icon ${highContrast ? 'text-indigo-600' : ''
-                } ${isImpaired ? 'text-amber-400' : ''}`}
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${
+                highContrast
+                  ? 'bg-[#7C3AED] text-white shadow-clayButton'
+                  : 'bg-white text-[#635F69] shadow-clayPill hover:-translate-y-1'
+              } active:scale-90`}
               aria-label="Toggle high contrast accessibility mode"
               aria-pressed={highContrast}
               title="High contrast mode"
@@ -162,8 +178,11 @@ const Navbar = () => {
                 setLargeFont((v) => !v);
                 speakGuidance('Toggled large font mode', 'polite');
               }}
-              className={`btn btn-ghost btn-icon ${largeFont ? 'text-indigo-600' : ''
-                } ${isImpaired ? 'text-amber-400' : ''}`}
+              className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${
+                largeFont
+                  ? 'bg-[#7C3AED] text-white shadow-clayButton'
+                  : 'bg-white text-[#635F69] shadow-clayPill hover:-translate-y-1'
+              } active:scale-90`}
               aria-label="Toggle large font size mode"
               aria-pressed={largeFont}
               title="Large text mode"
@@ -174,8 +193,7 @@ const Navbar = () => {
             {/* Voice Help Modal Trigger */}
             <button
               onClick={() => setShowCommandsHelp(true)}
-              className={`btn btn-ghost btn-icon ${isImpaired ? 'text-amber-400' : ''
-                }`}
+              className="w-10 h-10 rounded-2xl flex items-center justify-center bg-white text-[#635F69] shadow-clayPill hover:-translate-y-1 active:scale-90"
               aria-label="Open voice navigation commands cheat sheet"
               title="Voice Commands Help"
             >
@@ -186,26 +204,24 @@ const Navbar = () => {
           {/* User Info Chip */}
           {user && (
             <div
-              className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-xl border"
-              style={{
-                borderColor: 'var(--c-border)',
-                background: 'var(--c-surface-2)',
-              }}
+              className="hidden sm:flex items-center gap-3 px-4 py-2 rounded-2xl bg-white shadow-clayPill"
               tabIndex="0"
               aria-label={`Logged in user: ${user.name}, Email: ${user.email}`}
             >
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${isImpaired ? 'bg-amber-500 text-black' : 'bg-indigo-600 text-white'
-                  }`}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shadow-clayOrb ${
+                  isImpaired ? 'bg-amber-400 text-black' : 'bg-[#7C3AED] text-white'
+                }`}
+                style={{ fontFamily: 'Nunito, sans-serif' }}
                 aria-hidden="true"
               >
                 {user.name?.[0]?.toUpperCase() || 'U'}
               </div>
               <div className="leading-tight">
-                <p className="text-xs font-semibold" style={{ color: 'var(--c-text)' }}>
+                <p className="text-xs font-extrabold text-[#332F3A]" style={{ fontFamily: 'Nunito, sans-serif' }}>
                   {user.name}
                 </p>
-                <p className="text-xs" style={{ color: 'var(--c-text-muted)' }}>
+                <p className="text-[11px] text-[#635F69]">
                   {user.email}
                 </p>
               </div>
@@ -218,10 +234,9 @@ const Navbar = () => {
               speakGuidance('Signed out of AccessAble.', 'assertive');
               logout();
             }}
-            className={`btn btn-sm gap-1.5 ${isImpaired
-                ? 'border border-amber-500 text-amber-400 hover:bg-amber-500/10'
-                : 'btn-secondary'
-              }`}
+            className={`clay-btn-secondary text-sm py-2 px-4 rounded-2xl flex items-center gap-2 ${
+              isImpaired ? 'border border-amber-400 text-amber-400 bg-black' : ''
+            }`}
             aria-label="Sign out of your account"
           >
             <LogOut size={15} />
@@ -230,7 +245,7 @@ const Navbar = () => {
 
           {/* Mobile Menu Button */}
           <button
-            className="lg:hidden btn btn-ghost btn-icon"
+            className="lg:hidden w-10 h-10 rounded-2xl flex items-center justify-center bg-white shadow-clayPill active:scale-90"
             onClick={() => setMenuOpen((v) => !v)}
             aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
             aria-expanded={menuOpen}
@@ -243,18 +258,15 @@ const Navbar = () => {
       {/* Mobile Accessibility Drawer */}
       {menuOpen && (
         <div
-          className="lg:hidden border-t px-4 py-4 grid grid-cols-2 gap-3"
-          style={{
-            borderColor: 'var(--c-border)',
-            background: 'var(--c-surface)',
-          }}
+          className="lg:hidden mt-3 clay-card p-5 grid grid-cols-2 gap-3"
           role="region"
           aria-label="Mobile Accessibility Menu"
         >
           <button
             onClick={toggleVoiceGuidance}
-            className={`btn btn-sm ${voiceGuidance ? 'btn-primary' : 'btn-secondary'
-              }`}
+            className={`clay-btn-secondary text-xs py-2 px-3 rounded-2xl flex items-center justify-center gap-1.5 ${
+              voiceGuidance ? 'text-[#7C3AED] font-bold' : ''
+            }`}
             aria-label={voiceGuidance ? 'Disable voice guidance prompts' : 'Enable voice guidance prompts'}
             aria-pressed={voiceGuidance}
           >
@@ -262,7 +274,7 @@ const Navbar = () => {
           </button>
           <button
             onClick={readPageContent}
-            className="btn btn-secondary btn-sm"
+            className="clay-btn-secondary text-xs py-2 px-3 rounded-2xl flex items-center justify-center gap-1.5"
             aria-label="Read current page content aloud"
           >
             Read Page Aloud
@@ -272,8 +284,9 @@ const Navbar = () => {
               if (isListeningNav) stopVoiceNav();
               else startVoiceNav();
             }}
-            className={`btn btn-sm ${isListeningNav ? 'btn-danger' : 'btn-accent'
-              }`}
+            className={`clay-btn text-xs py-2 px-3 rounded-2xl flex items-center justify-center gap-1.5 ${
+              isListeningNav ? 'bg-[#DB2777]' : ''
+            }`}
             aria-label={isListeningNav ? 'Stop voice navigation' : 'Start hands-free voice navigation'}
             aria-pressed={isListeningNav}
           >
@@ -281,7 +294,7 @@ const Navbar = () => {
           </button>
           <button
             onClick={toggleTheme}
-            className="btn btn-secondary btn-sm"
+            className="clay-btn-secondary text-xs py-2 px-3 rounded-2xl flex items-center justify-center gap-1.5"
             aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
           >
             {isDark ? <Sun size={15} /> : <Moon size={15} />}{' '}
@@ -289,8 +302,9 @@ const Navbar = () => {
           </button>
           <button
             onClick={() => setHighContrast((v) => !v)}
-            className={`btn btn-sm ${highContrast ? 'btn-primary' : 'btn-secondary'
-              }`}
+            className={`clay-btn-secondary text-xs py-2 px-3 rounded-2xl flex items-center justify-center gap-1.5 ${
+              highContrast ? 'text-[#7C3AED] font-bold' : ''
+            }`}
             aria-label="Toggle high contrast accessibility mode"
             aria-pressed={highContrast}
           >
@@ -298,8 +312,9 @@ const Navbar = () => {
           </button>
           <button
             onClick={() => setLargeFont((v) => !v)}
-            className={`btn btn-sm ${largeFont ? 'btn-primary' : 'btn-secondary'
-              }`}
+            className={`clay-btn-secondary text-xs py-2 px-3 rounded-2xl flex items-center justify-center gap-1.5 ${
+              largeFont ? 'text-[#7C3AED] font-bold' : ''
+            }`}
             aria-label="Toggle large text mode"
             aria-pressed={largeFont}
           >

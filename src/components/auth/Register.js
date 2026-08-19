@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
 import { GoogleLogin } from '@react-oauth/google';
-import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Accessibility, Languages, Mic, Volume2 } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Accessibility, Languages, Mic, Volume2, Sparkles, Check } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { AccessibilityContext } from '../../context/AccessibilityContext';
 
@@ -9,9 +9,8 @@ const ROLES = [
     id: 'regular',
     icon: Languages,
     title: 'Regular User',
-    subtitle: 'I communicate with people who have disabilities',
-    color: 'blue',
-    gradient: 'from-blue-600 to-indigo-700',
+    subtitle: 'I communicate with people who have sensory impairments',
+    gradient: 'from-blue-400 to-indigo-600',
     ariaDesc: 'Regular User option. For users who communicate with people who have disabilities.',
   },
   {
@@ -19,8 +18,7 @@ const ROLES = [
     icon: Accessibility,
     title: 'Sensory Impaired User',
     subtitle: 'I have a visual or hearing impairment',
-    color: 'amber',
-    gradient: 'from-amber-500 to-orange-600',
+    gradient: 'from-amber-400 to-orange-500',
     ariaDesc: 'Sensory Impaired User option. Includes full voice guidance, page reader, and live transcription.',
   },
 ];
@@ -41,7 +39,6 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeListeningField, setActiveListeningField] = useState(null);
-  // Guard: only one SpeechRecognition session at a time
   const activeRecognitionRef = useRef(null);
 
   useEffect(() => {
@@ -80,7 +77,6 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
       speakGuidance('Speech recognition is not supported in this browser.', 'assertive');
       return;
     }
-    // Abort any existing session first
     if (activeRecognitionRef.current) {
       try { activeRecognitionRef.current.abort(); } catch {}
       activeRecognitionRef.current = null;
@@ -126,7 +122,6 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
     try { recognition.start(); } catch { setActiveListeningField(null); activeRecognitionRef.current = null; }
   };
 
-  /* ── Email/password submit ── */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -169,7 +164,6 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
     }
   };
 
-  /* ── Google OAuth register ── */
   const handleGoogleSuccess = async (credentialResponse) => {
     setError('');
     setIsGoogleLoading(true);
@@ -207,69 +201,80 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
   const selectedRole = ROLES.find((r) => r.id === role);
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center p-4"
-      style={{ background: 'linear-gradient(135deg, #eef2ff 0%, #f8faff 50%, #f5f3ff 100%)' }}
-    >
+    <div className="clay-canvas min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      {/* 3D Floating Blobs */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden -z-10" aria-hidden="true">
+        <div className="absolute -top-[10%] -left-[10%] w-[50vw] h-[50vw] rounded-full bg-[#7C3AED]/12 blur-3xl clay-blob-float" />
+        <div className="absolute -bottom-[10%] -right-[10%] w-[50vw] h-[50vw] rounded-full bg-[#DB2777]/12 blur-3xl clay-blob-float-delayed" />
+      </div>
+
       <a href="#register-form" className="skip-link">Skip to sign up form</a>
 
-      <div className="w-full max-w-lg">
+      <div className="w-full max-w-lg my-8 relative z-10">
         {/* Brand */}
         <div className="text-center mb-8">
           <div
-            className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4"
-            style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)' }}
+            className="inline-flex items-center justify-center w-16 h-16 rounded-[22px] bg-gradient-to-br from-[#A78BFA] to-[#7C3AED] shadow-clayOrb mb-4 text-white font-black text-2xl"
+            style={{ fontFamily: 'Nunito, sans-serif' }}
             aria-hidden="true"
           >
-            <span className="text-white text-2xl font-black">A</span>
+            A
           </div>
-          <h1 className="text-3xl font-black" style={{ color: '#1e293b' }}>AccessAble</h1>
-          <p className="text-sm mt-1" style={{ color: '#64748b' }}>Inclusive communication for everyone</p>
+          <h1
+            className="clay-font-black text-4xl text-[#332F3A] tracking-tight"
+            style={{ fontFamily: 'Nunito, sans-serif' }}
+          >
+            AccessAble
+          </h1>
+          <p className="clay-font-body text-base text-[#635F69] mt-1 font-medium">
+            Inclusive communication for everyone
+          </p>
         </div>
 
-        {/* Step indicator */}
-        <div
-          className="flex gap-2 mb-6"
-          role="progressbar"
-          aria-valuenow={step}
-          aria-valuemin="1"
-          aria-valuemax="2"
-          aria-label={`Registration step ${step} of 2`}
-        >
-          {[1, 2].map((s) => (
-            <div key={s} className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: '#e2e8f0' }}>
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{ width: step >= s ? '100%' : '0%', background: 'linear-gradient(90deg, #4f46e5, #7c3aed)' }}
-              />
-            </div>
-          ))}
+        {/* Step Indicator */}
+        <div className="flex items-center gap-3 mb-6 px-4">
+          <div className="flex-1 h-3 rounded-full bg-white shadow-clayPressed overflow-hidden p-0.5">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#A78BFA] to-[#7C3AED] transition-all duration-500 shadow-clayOrb"
+              style={{ width: step === 1 ? '50%' : '100%' }}
+            />
+          </div>
+          <span className="clay-pill text-xs font-bold py-1 px-3">
+            Step {step} of 2
+          </span>
         </div>
 
         <div
-          className="card p-8"
+          className="clay-card p-8 sm:p-10"
           id="register-form"
           tabIndex="-1"
-          style={{ boxShadow: '0 8px 40px rgb(79 70 229 / .10)' }}
+          style={{ borderRadius: '36px' }}
         >
           {step === 1 ? (
             <>
               {/* Step 1 Header */}
-              <div className="flex items-center justify-between mb-1">
-                <h2 className="text-2xl font-bold" style={{ color: 'var(--c-text)' }}>Choose Account Type</h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2
+                  className="clay-font-black text-2xl sm:text-3xl text-[#332F3A]"
+                  style={{ fontFamily: 'Nunito, sans-serif' }}
+                >
+                  Choose Account Type
+                </h2>
                 <button
                   type="button"
                   onClick={() => speakGuidance('Choose Account Type. Option 1: Regular User. Option 2: Sensory Impaired User.', 'assertive')}
-                  className="btn btn-ghost btn-sm gap-1"
+                  className="clay-pill text-xs py-1.5 px-3 flex items-center gap-1.5 text-[#7C3AED]"
                   aria-label="Listen to account type options"
                 >
                   <Volume2 size={15} /> Listen
                 </button>
               </div>
-              <p className="text-sm mb-6" style={{ color: 'var(--c-text-muted)' }}>Select how you'll use AccessAble</p>
+              <p className="clay-font-body text-sm text-[#635F69] mb-8">
+                Select how you'll use AccessAble
+              </p>
 
               {/* Role Cards */}
-              <div className="space-y-3 mb-6" role="radiogroup" aria-label="Account type selection">
+              <div className="space-y-4 mb-8" role="radiogroup" aria-label="Account type selection">
                 {ROLES.map((r) => {
                   const Icon = r.icon;
                   const selected = role === r.id;
@@ -282,27 +287,34 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
                       aria-label={r.ariaDesc}
                       onClick={() => handleRoleSelect(r.id)}
                       onFocus={() => speakGuidance(r.ariaDesc, 'polite')}
-                      className="w-full flex items-center gap-4 p-4 rounded-xl text-left transition-all duration-200"
-                      style={{
-                        border: `2px solid ${selected ? (r.id === 'regular' ? '#4f46e5' : '#f59e0b') : 'var(--c-border)'}`,
-                        background: selected ? (r.id === 'regular' ? 'rgb(79 70 229 / .06)' : 'rgb(245 158 11 / .06)') : 'var(--c-surface)',
-                      }}
+                      className={`w-full flex items-center gap-5 p-5 rounded-[24px] text-left transition-all duration-300 ${
+                        selected
+                          ? 'bg-white shadow-clayButton border-2 border-[#7C3AED] scale-[1.02]'
+                          : 'bg-white/70 shadow-clayPill hover:-translate-y-1'
+                      } active:scale-95`}
                     >
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${r.gradient} text-white`}>
-                        <Icon size={22} />
+                      <div
+                        className={`w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${r.gradient} text-white shadow-clayOrb`}
+                      >
+                        <Icon size={26} strokeWidth={2.5} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm" style={{ color: 'var(--c-text)' }}>{r.title}</p>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--c-text-muted)' }}>{r.subtitle}</p>
+                        <p
+                          className="clay-font-heading text-lg font-black text-[#332F3A]"
+                          style={{ fontFamily: 'Nunito, sans-serif' }}
+                        >
+                          {r.title}
+                        </p>
+                        <p className="clay-font-body text-sm text-[#635F69] mt-0.5 leading-snug">
+                          {r.subtitle}
+                        </p>
                       </div>
                       <div
-                        className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                        style={{
-                          borderColor: selected ? (r.id === 'regular' ? '#4f46e5' : '#f59e0b') : 'var(--c-border)',
-                          background: selected ? (r.id === 'regular' ? '#4f46e5' : '#f59e0b') : 'transparent',
-                        }}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                          selected ? 'bg-[#7C3AED] text-white shadow-clayOrb' : 'border-2 border-slate-300'
+                        }`}
                       >
-                        {selected && <div className="w-2 h-2 rounded-full bg-white" />}
+                        {selected && <Check size={14} strokeWidth={3} />}
                       </div>
                     </button>
                   );
@@ -310,13 +322,18 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
               </div>
 
               {error && (
-                <div role="alert" aria-live="assertive" className="form-error mb-4">
+                <div role="alert" aria-live="assertive" className="clay-pill bg-rose-50 text-[#DB2777] w-full text-sm font-bold p-3 rounded-2xl justify-center mb-6">
                   {error}
                 </div>
               )}
 
-              <button onClick={handleNext} className="btn btn-primary w-full btn-lg" aria-label="Continue to enter personal details">
-                Continue <ArrowRight size={18} />
+              <button
+                onClick={handleNext}
+                className="clay-btn w-full text-lg py-3.5 rounded-[22px]"
+                aria-label="Continue to enter personal details"
+              >
+                <span>Continue</span>
+                <ArrowRight size={18} strokeWidth={3} />
               </button>
             </>
           ) : (
@@ -325,16 +342,20 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
               <div className="flex items-center gap-3 mb-6">
                 <button
                   onClick={() => setStep(1)}
-                  className="btn btn-ghost btn-icon"
+                  className="clay-pill w-10 h-10 p-0 flex items-center justify-center text-lg font-bold"
                   aria-label="Go back to account type selection"
-                  style={{ flexShrink: 0 }}
                 >
                   ←
                 </button>
                 <div>
-                  <h2 className="text-2xl font-bold" style={{ color: 'var(--c-text)' }}>Create Account</h2>
+                  <h2
+                    className="clay-font-black text-2xl sm:text-3xl text-[#332F3A]"
+                    style={{ fontFamily: 'Nunito, sans-serif' }}
+                  >
+                    Your Profile
+                  </h2>
                   {selectedRole && (
-                    <span className={`badge ${role === 'regular' ? 'badge-info' : 'badge-warning'} mt-1`}>
+                    <span className="clay-pill text-xs font-bold text-[#7C3AED] mt-1 py-0.5 px-2.5">
                       {selectedRole.title}
                     </span>
                   )}
@@ -342,59 +363,58 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
               </div>
 
               {/* ── Google Sign-Up ── */}
-              <div className="mb-5">
-                <p className="text-xs font-semibold mb-2.5 uppercase tracking-wider" style={{ color: 'var(--c-text-muted)' }}>
-                  Quick register
-                </p>
+              <div className="mb-6">
                 <div className="flex justify-center" role="group" aria-label="Register with Google">
                   {isGoogleLoading ? (
                     <div
-                      className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border-2 font-semibold text-sm"
-                      style={{ borderColor: 'var(--c-border)', color: 'var(--c-text-muted)' }}
+                      className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl bg-white shadow-clayPill text-sm font-bold text-[#635F69]"
                       role="status"
                       aria-live="polite"
                     >
-                      <div className="w-4 h-4 border-2 border-indigo-400/40 border-t-indigo-500 rounded-full anim-spin" />
+                      <div className="w-4 h-4 border-2 border-purple-400 border-t-[#7C3AED] rounded-full anim-spin" />
                       Creating account…
                     </div>
                   ) : (
-                    <GoogleLogin
-                      onSuccess={handleGoogleSuccess}
-                      onError={handleGoogleError}
-                      useOneTap={false}
-                      text="signup_with"
-                      shape="rectangular"
-                      width="100%"
-                      theme="outline"
-                      size="large"
-                      logo_alignment="left"
-                    />
+                    <div className="w-full flex justify-center shadow-clayPill rounded-2xl overflow-hidden p-1 bg-white">
+                      <GoogleLogin
+                        onSuccess={handleGoogleSuccess}
+                        onError={handleGoogleError}
+                        useOneTap={false}
+                        text="signup_with"
+                        shape="rectangular"
+                        width="100%"
+                        theme="outline"
+                        size="large"
+                        logo_alignment="left"
+                      />
+                    </div>
                   )}
                 </div>
               </div>
 
               {/* ── Divider ── */}
-              <div className="relative flex items-center gap-3 mb-5">
-                <div className="flex-1 h-px" style={{ background: 'var(--c-border)' }} />
-                <span className="text-xs font-semibold uppercase tracking-wider px-1" style={{ color: 'var(--c-text-subtle)' }}>
-                  or fill in details
+              <div className="relative flex items-center gap-3 mb-6">
+                <div className="flex-1 h-px bg-[#d9d4e3]" />
+                <span className="text-xs font-bold uppercase tracking-wider text-[#635F69] px-2">
+                  or enter details
                 </span>
-                <div className="flex-1 h-px" style={{ background: 'var(--c-border)' }} />
+                <div className="flex-1 h-px bg-[#d9d4e3]" />
               </div>
 
               {/* ── Manual Form ── */}
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-
                 {/* Full Name */}
-                <div className="form-field">
-                  <div className="form-field-header">
-                    <label htmlFor="reg-name" className="label">
-                      Full Name <span style={{ color: '#ef4444' }}>*</span>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="reg-name" className="clay-font-heading text-sm font-extrabold text-[#332F3A]">
+                      Full Name <span className="text-[#DB2777]">*</span>
                     </label>
                     <button
                       type="button"
                       onClick={() => listenForField('full name', setName)}
-                      className={`btn btn-xs gap-1 ${activeListeningField === 'full name' ? 'btn-danger' : 'btn-secondary'}`}
+                      className={`clay-pill text-xs py-0.5 px-2.5 flex items-center gap-1 ${
+                        activeListeningField === 'full name' ? 'bg-[#DB2777] text-white' : 'text-[#7C3AED]'
+                      }`}
                       aria-label="Speak full name"
                     >
                       <Mic size={11} className={activeListeningField === 'full name' ? 'animate-pulse' : ''} />
@@ -402,14 +422,14 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
                     </button>
                   </div>
                   <div className="relative">
-                    <User className="input-icon" size={16} aria-hidden="true" />
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-[#635F69]" size={18} aria-hidden="true" />
                     <input
                       id="reg-name"
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       onFocus={() => speakGuidance('Full name edit box. Required.', 'polite')}
-                      className="input-field pl-9"
+                      className="clay-input pl-11"
                       placeholder="Your full name"
                       autoComplete="name"
                       required
@@ -419,15 +439,17 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
                 </div>
 
                 {/* Email */}
-                <div className="form-field">
-                  <div className="form-field-header">
-                    <label htmlFor="reg-email" className="label">
-                      Email Address <span style={{ color: '#ef4444' }}>*</span>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="reg-email" className="clay-font-heading text-sm font-extrabold text-[#332F3A]">
+                      Email Address <span className="text-[#DB2777]">*</span>
                     </label>
                     <button
                       type="button"
                       onClick={() => listenForField('email', setEmail)}
-                      className={`btn btn-xs gap-1 ${activeListeningField === 'email' ? 'btn-danger' : 'btn-secondary'}`}
+                      className={`clay-pill text-xs py-0.5 px-2.5 flex items-center gap-1 ${
+                        activeListeningField === 'email' ? 'bg-[#DB2777] text-white' : 'text-[#7C3AED]'
+                      }`}
                       aria-label="Speak email address"
                     >
                       <Mic size={11} className={activeListeningField === 'email' ? 'animate-pulse' : ''} />
@@ -435,14 +457,14 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
                     </button>
                   </div>
                   <div className="relative">
-                    <Mail className="input-icon" size={16} aria-hidden="true" />
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[#635F69]" size={18} aria-hidden="true" />
                     <input
                       id="reg-email"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       onFocus={() => speakGuidance('Email address edit box. Required.', 'polite')}
-                      className="input-field pl-9"
+                      className="clay-input pl-11"
                       placeholder="you@example.com"
                       autoComplete="email"
                       required
@@ -452,15 +474,17 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
                 </div>
 
                 {/* Password */}
-                <div className="form-field">
-                  <div className="form-field-header">
-                    <label htmlFor="reg-password" className="label">
-                      Password <span style={{ color: '#ef4444' }}>*</span>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor="reg-password" className="clay-font-heading text-sm font-extrabold text-[#332F3A]">
+                      Password <span className="text-[#DB2777]">*</span>
                     </label>
                     <button
                       type="button"
                       onClick={() => listenForField('password', setPassword)}
-                      className={`btn btn-xs gap-1 ${activeListeningField === 'password' ? 'btn-danger' : 'btn-secondary'}`}
+                      className={`clay-pill text-xs py-0.5 px-2.5 flex items-center gap-1 ${
+                        activeListeningField === 'password' ? 'bg-[#DB2777] text-white' : 'text-[#7C3AED]'
+                      }`}
                       aria-label="Speak password"
                     >
                       <Mic size={11} className={activeListeningField === 'password' ? 'animate-pulse' : ''} />
@@ -468,14 +492,14 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
                     </button>
                   </div>
                   <div className="relative">
-                    <Lock className="input-icon" size={16} aria-hidden="true" />
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#635F69]" size={18} aria-hidden="true" />
                     <input
                       id="reg-password"
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       onFocus={() => speakGuidance('Password edit box. Minimum 6 characters.', 'polite')}
-                      className="input-field pl-9 pr-11"
+                      className="clay-input pl-11 pr-12"
                       placeholder="Minimum 6 characters"
                       autoComplete="new-password"
                       required
@@ -484,29 +508,28 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
                     <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2"
-                      style={{ color: 'var(--c-text-subtle)', lineHeight: 0, background: 'none', border: 'none', cursor: 'pointer' }}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[#635F69] hover:text-[#7C3AED] transition-colors p-1"
                       aria-label={showPassword ? 'Hide password' : 'Show password'}
                     >
-                      {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </div>
 
                 {/* Confirm Password */}
-                <div className="form-field">
-                  <label htmlFor="reg-confirm" className="label">
-                    Confirm Password <span style={{ color: '#ef4444' }}>*</span>
+                <div>
+                  <label htmlFor="reg-confirm" className="clay-font-heading text-sm font-extrabold text-[#332F3A] block mb-1.5">
+                    Confirm Password <span className="text-[#DB2777]">*</span>
                   </label>
                   <div className="relative">
-                    <Lock className="input-icon" size={16} aria-hidden="true" />
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#635F69]" size={18} aria-hidden="true" />
                     <input
                       id="reg-confirm"
                       type={showConfirm ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       onFocus={() => speakGuidance('Confirm password edit box. Re-enter your password.', 'polite')}
-                      className="input-field pl-9 pr-11"
+                      className="clay-input pl-11 pr-12"
                       placeholder="Re-enter your password"
                       autoComplete="new-password"
                       required
@@ -515,17 +538,16 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
                     <button
                       type="button"
                       onClick={() => setShowConfirm((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2"
-                      style={{ color: 'var(--c-text-subtle)', lineHeight: 0, background: 'none', border: 'none', cursor: 'pointer' }}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[#635F69] hover:text-[#7C3AED] transition-colors p-1"
                       aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
                     >
-                      {showConfirm ? <EyeOff size={17} /> : <Eye size={17} />}
+                      {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </div>
 
                 {error && (
-                  <div role="alert" aria-live="assertive" className="form-error">
+                  <div role="alert" aria-live="assertive" className="clay-pill bg-rose-50 text-[#DB2777] w-full text-sm font-bold p-3 rounded-2xl justify-center">
                     {error}
                   </div>
                 )}
@@ -533,28 +555,30 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="btn btn-primary w-full btn-lg"
+                  className="clay-btn w-full text-lg py-3.5 rounded-[22px]"
                   aria-label="Create your AccessAble account"
                 >
                   {isLoading ? (
                     <>
-                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full anim-spin" />
+                      <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full anim-spin" />
                       Creating Account…
                     </>
                   ) : (
-                    <>Create Account <ArrowRight size={18} /></>
+                    <>
+                      <span>Create Account</span>
+                      <ArrowRight size={18} strokeWidth={3} />
+                    </>
                   )}
                 </button>
               </form>
             </>
           )}
 
-          <p className="text-center text-sm mt-6" style={{ color: 'var(--c-text-muted)' }}>
+          <p className="text-center text-sm mt-7 text-[#635F69] font-medium">
             Already have an account?{' '}
             <button
               onClick={onSwitchToLogin}
-              className="font-semibold"
-              style={{ color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer' }}
+              className="font-extrabold text-[#7C3AED] hover:underline cursor-pointer bg-transparent border-0 p-0"
               aria-label="Go to sign in page"
             >
               Sign in
@@ -563,14 +587,13 @@ const Register = ({ onSwitchToLogin, onBackToLanding }) => {
         </div>
 
         {onBackToLanding && (
-          <p className="text-center mt-4">
+          <p className="text-center mt-6">
             <button
               onClick={onBackToLanding}
-              className="text-sm"
-              style={{ color: 'var(--c-text-subtle)', background: 'none', border: 'none', cursor: 'pointer' }}
+              className="clay-pill text-sm font-bold text-[#635F69] hover:text-[#7C3AED] cursor-pointer"
               aria-label="Back to home page"
             >
-              ← Back to home
+              ← Back to Home
             </button>
           </p>
         )}
