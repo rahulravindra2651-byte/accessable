@@ -4,12 +4,8 @@
  * Classifies ISL vocabulary signs (words and phrases) from hand landmark features.
  *
  * Reference: ISLRTC ISL vocabulary documentation + two-hand sign conventions.
- * Each rule returns { wordId, label, confidence } or null.
- *
- * HOW TO ADD A NEW ISL WORD:
- * 1. Add the word to ISL_VOCABULARY in islDictionary.js with its id, label, etc.
- * 2. Add a rule function below following the `rule_WORD` pattern.
- * 3. Add it to the RULES array. The pipeline picks it up automatically.
+ * ARCHITECTURE: Scored ranking — evaluates all candidate vocabulary rules
+ * and returns the best scoring match with dynamic confidence.
  */
 
 /**
@@ -20,358 +16,399 @@
 export const classifyISLVocabulary = (dominant, offhand = null) => {
   if (!dominant) return null;
 
+  const candidates = [];
   for (const rule of RULES) {
     const result = rule(dominant, offhand);
-    if (result) return result;
+    if (result) candidates.push(result);
   }
-  return null;
+
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => b.score - a.score);
+  const best = candidates[0];
+  return {
+    wordId: best.wordId,
+    label: best.label,
+    confidence: Math.min(best.score, 0.98),
+  };
 };
 
-const ok = (wordId, label, conf) => ({ wordId, label, confidence: conf });
+const score = (wordId, label, base, bonuses = 0) => ({
+  wordId,
+  label,
+  score: Math.max(0.50, base + bonuses),
+});
+
+const proximity = (val, ideal, range, maxBonus = 0.08) => {
+  const dist = Math.abs(val - ideal);
+  if (dist > range) return 0;
+  return maxBonus * (1 - dist / range);
+};
 
 // ─── ISL Vocabulary Rules ────────────────────────────────────────────────────
 
 /**
- * HELLO / NAMASTE — Open palm forward (all fingers extended, facing camera).
- * ISL: Both hands brought together in a namaste gesture.
- * Dominant-hand approximation: Open palm, all fingers up, spread moderate.
+ * HELLO / NAMASTE — Open palm forward (all 5 fingers spread wide, facing camera)
+ * or two hands brought together.
  */
 const rule_HELLO = (d, o) => {
-  if (d.indexUp && d.midUp && d.ringUp && d.pinkyUp &&
-      d.thumbUp && d.fingerSpread > 0.55 && d.avgTipDist > 1.1) {
-    // Bonus confidence if offhand also open (two-hand namaste)
-    const twoHand = o && o.indexUp && o.midUp ? 0.05 : 0;
-    return ok('HELLO', 'Hello / Namaste', 0.88 + twoHand);
+  const twoHandOpen = o && o.indexUp && o.midUp && o.ringUp && o.pinkyUp;
+  if (twoHandOpen) {
+    return score('HELLO', 'Hello / Namaste', 0.92);
+  }
+
+  if (d.indexUp && d.midUp && d.ringUp && d.pinkyUp && d.thumbUp &&
+      d.fingerSpread > 0.58 && d.palmFacingCamera) {
+    const s = 0.86
+      + proximity(d.fingerSpread, 0.80, 0.20, 0.06)
+      + (d.palmFacingCamera ? 0.04 : 0);
+    return score('HELLO', 'Hello / Namaste', s);
   }
   return null;
 };
 
 /**
- * THANK YOU — Flat hand moving from chin forward.
- * Static approximation: flat open palm, fingers together, no spread.
+ * THANK YOU — Flat open palm moving from chin forward. Fingers together.
  */
 const rule_THANK_YOU = (d) => {
-  if (d.indexUp && d.midUp && d.ringUp && d.pinkyUp &&
-      d.thumbUp && d.fingerSpread < 0.55 && d.avgTipDist > 1.05) {
-    return ok('THANK_YOU', 'Thank You', 0.82);
+  if (d.indexUp && d.midUp && d.ringUp && d.pinkyUp && d.thumbUp &&
+      d.fingerSpread < 0.52 && d.palmFacingCamera) {
+    const s = 0.83
+      + proximity(d.fingerSpread, 0.35, 0.15, 0.05)
+      + (d.handHeightRatio < 0.65 ? 0.04 : 0);
+    return score('THANK_YOU', 'Thank You', s);
   }
   return null;
 };
 
 /**
- * PLEASE — Open hand rubbing circle over heart.
- * Static: all fingers extended, palm facing self (thumb side visible).
+ * PLEASE — Open hand flat against chest (palm facing SELF / inward).
  */
 const rule_PLEASE = (d) => {
   if (d.indexUp && d.midUp && d.ringUp && d.pinkyUp &&
-      !d.thumbUp && d.fingerSpread < 0.6) {
-    return ok('PLEASE', 'Please', 0.78);
+      !d.palmFacingCamera && d.fingerSpread < 0.60) {
+    const s = 0.82
+      + (!d.palmFacingCamera ? 0.06 : 0)
+      + proximity(d.fingerSpread, 0.40, 0.15, 0.04);
+    return score('PLEASE', 'Please', s);
   }
   return null;
 };
 
 /**
- * SORRY — Fist circular motion over chest.
- * Static approximation: closed fist, thumb alongside.
+ * STOP / HALT — Flat vertical palm facing out to the viewer (stop sign).
+ */
+const rule_STOP = (d) => {
+  if (d.indexUp && d.midUp && d.ringUp && d.pinkyUp &&
+      !d.thumbUp && d.palmFacingCamera &&
+      d.fingerSpread < 0.48 && d.thumbIndexPinch > 0.42) {
+    const s = 0.84
+      + (d.palmFacingCamera ? 0.05 : 0)
+      + proximity(d.fingerSpread, 0.30, 0.15, 0.04);
+    return score('STOP', 'Stop', s);
+  }
+  return null;
+};
+
+/**
+ * MY / MINE — Flat palm placed close over chest, fingers close together.
+ */
+const rule_MY = (d) => {
+  if (d.indexUp && d.midUp && d.ringUp && d.pinkyUp &&
+      !d.thumbUp && !d.palmFacingCamera && d.fingerTightness < 0.22) {
+    const s = 0.79
+      + (!d.palmFacingCamera ? 0.05 : 0)
+      + proximity(d.fingerTightness, 0.12, 0.10, 0.05);
+    return score('MY', 'My / Mine', s);
+  }
+  return null;
+};
+
+/**
+ * STUDENT — Open flat hand near head / forehead (learning sign).
+ */
+const rule_STUDENT = (d) => {
+  if (d.indexUp && d.midUp && d.ringUp && d.pinkyUp &&
+      !d.thumbUp && d.palmFacingCamera && d.handHeightRatio < 0.42) {
+    const s = 0.77
+      + (d.handHeightRatio < 0.35 ? 0.06 : 0);
+    return score('STUDENT', 'Student', s);
+  }
+  return null;
+};
+
+/**
+ * SORRY — Fist rubbing circle over chest.
  */
 const rule_SORRY = (d) => {
   if (!d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
-      d.thumbAboveIndex && d.avgTipDist < 0.92) {
-    return ok('SORRY', 'Sorry', 0.79);
+      d.thumbAboveIndex && !d.thumbCrossesIndex && d.avgTipDist < 0.92) {
+    const s = 0.76
+      + proximity(d.avgTipDist, 0.80, 0.15, 0.04);
+    return score('SORRY', 'Sorry', s);
   }
   return null;
 };
 
 /**
- * YES — Fist nodding (fist with thumb up, moving up-down).
- * Static: closed fist, thumb pointing up above index.
+ * YES — Fist with thumb up, moderate extension.
  */
 const rule_YES = (d) => {
   if (!d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
-      d.thumbUp && d.thumbAboveIndex && d.thumbExt > 1.3) {
-    return ok('YES', 'Yes', 0.87);
+      d.thumbUp && d.thumbAboveIndex && d.thumbExt >= 1.25 && d.thumbExt <= 1.55) {
+    const s = 0.85
+      + proximity(d.thumbExt, 1.40, 0.15, 0.05);
+    return score('YES', 'Yes', s);
   }
   return null;
 };
 
 /**
- * NO — Index and middle fingers snapping shut against thumb.
- * Static: index + middle extended, spread, thumb extended.
+ * GOOD — Closed fist + thumb pointing high up (strong thumbs-up).
+ */
+const rule_GOOD = (d) => {
+  if (!d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
+      d.thumbUp && d.thumbExt > 1.50 && d.thumbIndexPinch > 0.35) {
+    const s = 0.88
+      + proximity(d.thumbExt, 1.70, 0.20, 0.06);
+    return score('GOOD', 'Good', s);
+  }
+  return null;
+};
+
+/**
+ * NO — Index and middle fingers extended, thumb extended (pinching/snapping shape).
  */
 const rule_NO = (d) => {
   if (d.indexUp && d.midUp && !d.ringUp && !d.pinkyUp &&
-      d.thumbUp && d.indexMidPinch > 0.25) {
-    return ok('NO', 'No', 0.84);
+      d.thumbUp && d.indexMidPinch > 0.22) {
+    const s = 0.84
+      + proximity(d.indexMidPinch, 0.35, 0.12, 0.05);
+    return score('NO', 'No', s);
   }
   return null;
 };
 
 /**
- * HELP — Fist on flat palm, moving upward.
- * Two-hand sign: dominant closed fist placed on offhand flat palm.
- * One-hand approximation: closed fist with thumb up (asking for help).
+ * HELP — Dominant closed fist placed on offhand flat palm.
  */
 const rule_HELP = (d, o) => {
-  // Two-hand: dominant fist + offhand open palm
-  if (!d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
-      d.thumbUp && o && o.indexUp && o.midUp && o.ringUp && o.pinkyUp) {
-    return ok('HELP', 'Help', 0.90);
-  }
-  // One-hand fallback: thumb-up closed fist (raised thumb = calling for help)
-  if (!d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
-      d.thumbUp && d.thumbExt > 1.4 && d.avgTipDist < 0.95) {
-    return ok('HELP', 'Help', 0.80);
+  // Two-hand: dominant fist + offhand open palm (Primary ISL standard)
+  if (!d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp && d.thumbUp &&
+      o && o.indexUp && o.midUp && o.ringUp && o.pinkyUp) {
+    return score('HELP', 'Help', 0.93);
   }
   return null;
 };
 
 /**
- * WATER — W gesture (3 fingers: index, middle, ring) tapping chin.
- * Static: index + middle + ring extended, pinky and thumb curled.
+ * WATER — W handshape (index, middle, ring extended).
  */
 const rule_WATER = (d) => {
   if (d.indexUp && d.midUp && d.ringUp && !d.pinkyUp &&
       !d.thumbUp && d.fingerSpread < 0.75) {
-    return ok('WATER', 'Water', 0.85);
+    const s = 0.85
+      + proximity(d.fingerSpread, 0.50, 0.20, 0.05);
+    return score('WATER', 'Water', s);
   }
   return null;
 };
 
 /**
- * FOOD / EAT — Fingertips bunched together tapping mouth.
- * Static: all fingertips pinched together (flat O), palm facing face.
+ * FOOD / EAT — Fingertips bunched tightly together pointing to mouth.
  */
 const rule_FOOD = (d) => {
   if (!d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
-      d.thumbIndexPinch < 0.22 && d.thumbMidPinch < 0.28 &&
-      d.avgTipDist > 0.75 && d.avgTipDist < 1.1) {
-    return ok('EAT', 'Food / Eat', 0.82);
+      d.fingerTightness < 0.18 &&
+      d.thumbIndexPinch < 0.22 && d.thumbMidPinch < 0.26 &&
+      d.avgTipDist > 0.70 && d.avgTipDist < 1.10) {
+    const s = 0.84
+      + proximity(d.fingerTightness, 0.10, 0.08, 0.06);
+    return score('EAT', 'Food / Eat', s);
   }
   return null;
 };
 
 /**
- * STOP / HALT — Flat vertical palm sliced down.
- * Static: all fingers together, extended, palm vertical (like a stop sign).
+ * HOME — Fingertips together, hand near cheek/face area.
  */
-const rule_STOP = (d) => {
-  if (d.indexUp && d.midUp && d.ringUp && d.pinkyUp &&
-      !d.thumbUp && d.fingerSpread < 0.45 && d.thumbIndexPinch > 0.5) {
-    return ok('STOP', 'Stop', 0.83);
+const rule_HOME = (d) => {
+  if (!d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
+      d.fingerTightness >= 0.18 && d.fingerTightness < 0.35 &&
+      d.thumbIndexPinch < 0.26 && d.handHeightRatio < 0.50) {
+    const s = 0.78
+      + (d.handHeightRatio < 0.40 ? 0.05 : 0);
+    return score('HOME', 'Home', s);
   }
   return null;
 };
 
 /**
- * EMERGENCY — Index finger pointing up + shaking (static: pointing up only).
+ * EMERGENCY — Index finger pointing up only (high extension).
  */
 const rule_EMERGENCY = (d) => {
   if (d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
-      !d.thumbUp && d.indexExt > 1.5) {
-    return ok('EMERGENCY', 'Emergency', 0.80);
+      !d.thumbUp && d.indexExt > 1.55 && !d.handIsHorizontal) {
+    const s = 0.82
+      + proximity(d.indexExt, 1.70, 0.15, 0.05);
+    return score('EMERGENCY', 'Emergency', s);
   }
   return null;
 };
 
 /**
- * DOCTOR — Tapping wrist with index + middle fingers.
- * Static: index and middle extended together, bent toward palm.
+ * DOCTOR — Index and middle extended, tapping pulse/wrist or bent.
  */
 const rule_DOCTOR = (d) => {
   if (d.indexUp && d.midUp && !d.ringUp && !d.pinkyUp &&
-      !d.thumbUp && d.indexMidPinch < 0.18 && d.indexBentAtPIP) {
-    return ok('DOCTOR', 'Doctor', 0.78);
+      !d.thumbUp && d.indexMidPinch < 0.20 && (d.indexBentAtPIP || d.handIsHorizontal)) {
+    const s = 0.78
+      + (d.indexBentAtPIP ? 0.04 : 0);
+    return score('DOCTOR', 'Doctor', s);
   }
   return null;
 };
 
 /**
- * MEDICINE — Rocking gesture: middle finger on thumb, others extended.
- * Static: middle finger pinching thumb, index+ring+pinky up.
+ * MEDICINE — Middle finger touching thumb (rocking gesture), others up.
  */
 const rule_MEDICINE = (d) => {
   if (d.indexUp && !d.midUp && d.ringUp && d.pinkyUp &&
       d.thumbMidPinch < 0.22) {
-    return ok('MEDICINE', 'Medicine', 0.77);
+    const s = 0.79
+      + proximity(d.thumbMidPinch, 0.10, 0.12, 0.05);
+    return score('MEDICINE', 'Medicine', s);
   }
   return null;
 };
 
 /**
- * HOSPITAL — H handshape (index+middle) moved across.
- * Static: index + middle extended together, horizontal.
+ * HOSPITAL — H handshape (index+middle extended horizontally).
  */
 const rule_HOSPITAL = (d) => {
   if (d.indexUp && d.midUp && !d.ringUp && !d.pinkyUp &&
-      !d.thumbUp && d.indexMidPinch < 0.22 && !d.indexBentAtPIP) {
-    return ok('HOSPITAL', 'Hospital', 0.75);
+      !d.thumbUp && d.indexMidPinch < 0.22 && d.handIsHorizontal) {
+    const s = 0.78
+      + (d.handIsHorizontal ? 0.06 : 0);
+    return score('HOSPITAL', 'Hospital', s);
   }
   return null;
 };
 
 /**
- * POLICE — P handshape: index pointing forward with thumb.
+ * POLICE — Index pointing forward with thumb extended (P shape).
  */
 const rule_POLICE = (d) => {
   if (d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
       d.thumbUp && d.thumbIndexPinch < 0.38) {
-    return ok('POLICE', 'Police', 0.74);
+    const s = 0.76
+      + proximity(d.thumbIndexPinch, 0.25, 0.12, 0.04);
+    return score('POLICE', 'Police', s);
   }
   return null;
 };
 
 /**
- * HOME — Fingertips together, touching cheek (flat O moving to cheek).
- * Static: all fingers pinched together (flat O shape, compact).
- */
-const rule_HOME = (d) => {
-  if (!d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
-      d.thumbIndexPinch < 0.25 && d.avgTipDist > 0.80 && d.avgTipDist < 1.05) {
-    return ok('HOME', 'Home', 0.76);
-  }
-  return null;
-};
-
-/**
- * MOTHER — M handshape: three fingers on thumb touching chin.
- * Static: 3 fingers bent over thumb region.
+ * MOTHER — 3 fingers curled over thumb area near chin.
  */
 const rule_MOTHER = (d) => {
   if (!d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
       !d.thumbUp && d.avgTipDist > 0.65 && d.avgTipDist < 1.0 &&
       d.thumbBelowWrist) {
-    return ok('MOTHER', 'Mother', 0.74);
+    const s = 0.75
+      + (d.handHeightRatio < 0.50 ? 0.04 : 0);
+    return score('MOTHER', 'Mother', s);
   }
   return null;
 };
 
 /**
- * FATHER — F handshape: index+middle pinch + 3 fingers extended, touching forehead.
+ * FATHER — F handshape (index-thumb pinch + 3 up) near forehead.
  */
 const rule_FATHER = (d) => {
   if (!d.indexUp && d.midUp && d.ringUp && d.pinkyUp &&
       d.thumbIndexPinch < 0.22) {
-    return ok('FATHER', 'Father', 0.74);
+    const s = 0.76
+      + (d.handHeightRatio < 0.45 ? 0.04 : 0);
+    return score('FATHER', 'Father', s);
   }
   return null;
 };
 
 /**
- * SCHOOL — Clapping motion (two flat palms).
- * Two-hand: both hands open, palms facing.
- * Static dominant: open palm, 4+ fingers up.
+ * SCHOOL — Two open hands clapping together.
  */
 const rule_SCHOOL = (d, o) => {
   if (d.indexUp && d.midUp && d.ringUp && d.pinkyUp &&
-      o && o.indexUp && o.midUp && o.ringUp && o.pinkyUp &&
-      d.fingerSpread < 0.6 && o.fingerSpread < 0.6) {
-    return ok('SCHOOL', 'School', 0.78);
+      o && o.indexUp && o.midUp && o.ringUp && o.pinkyUp) {
+    return score('SCHOOL', 'School', 0.88);
   }
   return null;
 };
 
 /**
- * STUDENT — Learn sign: flat hand from palm to forehead.
- * Static: flat open hand (4 fingers up, thumb alongside).
- */
-const rule_STUDENT = (d) => {
-  if (d.indexUp && d.midUp && d.ringUp && d.pinkyUp &&
-      !d.thumbUp && d.fingerSpread < 0.5 && d.avgTipDist > 1.0) {
-    return ok('STUDENT', 'Student', 0.73);
-  }
-  return null;
-};
-
-/**
- * NAME — H handshape: index + middle tapping together (H = 2 fingers).
- * Already covered by HOSPITAL — use confidence distinction.
- * NAME: index + middle with thumbIndexPinch more open.
+ * NAME — Index + middle tapping together.
  */
 const rule_NAME = (d) => {
   if (d.indexUp && d.midUp && !d.ringUp && !d.pinkyUp &&
-      !d.thumbUp && d.indexMidPinch > 0.18 && d.indexMidPinch < 0.30) {
-    return ok('NAME', 'Name', 0.76);
+      !d.thumbUp && d.indexMidPinch > 0.18 && d.indexMidPinch < 0.30 && !d.handIsHorizontal) {
+    const s = 0.77
+      + proximity(d.indexMidPinch, 0.24, 0.06, 0.04);
+    return score('NAME', 'Name', s);
   }
   return null;
 };
 
 /**
- * GOOD — Thumb up (closed fist + thumb pointing up high).
- * Different from YES: thumb is more extended and index is not touching.
- */
-const rule_GOOD = (d) => {
-  if (!d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
-      d.thumbUp && d.thumbExt > 1.5 && d.thumbAboveIndex &&
-      d.thumbIndexPinch > 0.30) {
-    return ok('GOOD', 'Good', 0.85);
-  }
-  return null;
-};
-
-/**
- * DANGER — Both fists tapping together.
- * Static dominant: closed fist facing in.
+ * DANGER — Both fists.
  */
 const rule_DANGER = (d, o) => {
   if (!d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
       o && !o.indexUp && !o.midUp && !o.ringUp && !o.pinkyUp) {
-    return ok('DANGER', 'Danger', 0.79);
+    return score('DANGER', 'Danger', 0.86);
   }
   return null;
 };
 
 /**
- * MY / MINE — Flat palm placed on chest.
- * Static: open palm (or slightly closed), pointing inward.
- */
-const rule_MY = (d) => {
-  if (d.indexUp && d.midUp && d.ringUp && d.pinkyUp &&
-      !d.thumbUp && d.fingerSpread < 0.45) {
-    return ok('MY', 'My / Mine', 0.74);
-  }
-  return null;
-};
-
-/**
- * YOU — Index finger pointing forward.
+ * YOU — Index finger pointing forward to user/camera.
  */
 const rule_YOU = (d) => {
   if (d.indexUp && !d.midUp && !d.ringUp && !d.pinkyUp &&
-      !d.thumbUp && d.indexExt > 1.45 && d.thumbIndexPinch > 0.38) {
-    return ok('YOU', 'You / Your', 0.82);
+      !d.thumbUp && d.indexExt > 1.40 && d.thumbIndexPinch > 0.38) {
+    const s = 0.82
+      + proximity(d.indexExt, 1.60, 0.20, 0.04);
+    return score('YOU', 'You / Your', s);
   }
   return null;
 };
 
 // ─── Rule Registry ────────────────────────────────────────────────────────────
-// Priority: two-hand signs first, then specific one-hand signs.
 const RULES = [
-  // Two-hand signs (most specific)
-  rule_HELP,       // dominant fist + offhand open palm
-  rule_DANGER,     // two fists
-  rule_SCHOOL,     // two open palms clapping
-
-  // Specific one-hand vocabulary
-  rule_MEDICINE,   // thumb-mid pinch + 3 up
-  rule_FATHER,     // index pinch + 3 up (F-shape)
-  rule_FOOD,       // all tips pinched
-  rule_HOME,       // compact O + specific avg dist range
-  rule_MOTHER,     // 3 fingers bent, thumb below wrist
-  rule_GOOD,       // thumb extended high + large gap
-  rule_YES,        // thumb up + above index + high ext
-  rule_WATER,      // W shape: index+mid+ring
-  rule_NO,         // index+mid+thumb up
-  rule_DOCTOR,     // index+mid bent at PIP
-  rule_HOSPITAL,   // index+mid straight, close together
-  rule_NAME,       // index+mid spread medium
-  rule_STUDENT,    // 4 fingers together, no thumb
-  rule_STOP,       // 4 fingers together, thumb far
-  rule_EMERGENCY,  // index only, very extended
-  rule_POLICE,     // index + thumb pinch
-  rule_SORRY,      // fist, thumb alongside (not above)
-  rule_PLEASE,     // 4 fingers, no thumb
-  rule_MY,         // 4 fingers together very close
-  rule_YOU,        // index only, thumb far
-  rule_THANK_YOU,  // all 5 together, wide spread
-  rule_HELLO,      // all 5, max spread (checked last as most general)
+  rule_HELP,       // Two-hand fist + palm (highest priority)
+  rule_SCHOOL,     // Two-hand open palms
+  rule_DANGER,     // Two-hand fists
+  rule_HELLO,      // HELLO (two-hand namaste or wide open forward palm)
+  rule_THANK_YOU,  // Flat forward palm (fingers together)
+  rule_PLEASE,     // Inward flat palm on chest
+  rule_STOP,       // Vertical outward stop palm
+  rule_MY,         // Tight flat palm on chest
+  rule_STUDENT,    // Head-height learning hand
+  rule_GOOD,       // Strong thumbs up
+  rule_YES,        // Moderate thumbs up / nodding
+  rule_NO,         // Index+mid+thumb snap shape
+  rule_WATER,      // W shape
+  rule_FOOD,       // Tight bunched fingertips
+  rule_HOME,       // Cheek gathered fingers
+  rule_EMERGENCY,  // Single index straight up
+  rule_MEDICINE,   // Thumb-mid pinch
+  rule_FATHER,     // F-shape
+  rule_MOTHER,     // M-shape
+  rule_DOCTOR,     // Wrist tap / bent fingers
+  rule_HOSPITAL,   // Horizontal H
+  rule_NAME,       // Vertical H
+  rule_POLICE,     // P-shape
+  rule_SORRY,      // Chest fist
+  rule_YOU,        // Index point forward
 ];
+

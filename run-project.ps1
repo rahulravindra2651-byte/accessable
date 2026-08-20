@@ -1,23 +1,16 @@
-# PowerShell script to install dependencies and run both frontend and backend
+# PowerShell script to run both backend and frontend for AccessAble
+$projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $projectRoot) { $projectRoot = Get-Location }
 
-# Set the project root path
-$projectRoot = "c:\Users\R Rahul\Downloads\AccessAble-main\AccessAble-main\6P1\6P1\6P1\accessable"
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "  AccessAble — Starting Local Services  " -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
 
-# Backend setup
-Write-Host "Installing backend dependencies..."
-cd "$projectRoot\backend"
-npm install
+# 1. Start Backend in a background process
+Write-Host "`n[1/2] Starting backend on http://localhost:5000..." -ForegroundColor Yellow
+$backendProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$projectRoot\backend'; Write-Host '--- AccessAble Backend Server ---' -ForegroundColor Cyan; npm start" -PassThru
 
-Write-Host "Starting backend server..."
-Start-Job -ScriptBlock {
-    cd "c:\Users\R Rahul\Downloads\AccessAble-main\AccessAble-main\6P1\6P1\6P1\accessable\backend"
-    npm start
-} | Out-Null
-
-# Frontend setup
-Write-Host "Installing frontend dependencies..."
+# 2. Start Frontend
+Write-Host "[2/2] Starting frontend on http://localhost:3000..." -ForegroundColor Green
 cd "$projectRoot"
-npm install
-
-Write-Host "Starting frontend development server..."
-npm start
+npm run dev:frontend

@@ -56,11 +56,18 @@ export const classifyFrame = (landmarkSets, mode = RECOGNITION_MODES.AUTO) => {
       return runWord(dominant, offhand);
 
     case RECOGNITION_MODES.AUTO:
-    default:
-      // Try in priority order: WORD → NUMBER → ALPHABET
-      return runWord(dominant, offhand)
-        || runNumber(dominant)
-        || runAlphabet(dominant);
+    default: {
+      // Evaluate all modes and choose the highest-confidence match
+      const candidates = [
+        runWord(dominant, offhand),
+        runNumber(dominant),
+        runAlphabet(dominant),
+      ].filter(Boolean);
+
+      if (candidates.length === 0) return null;
+      candidates.sort((a, b) => b.confidence - a.confidence);
+      return candidates[0];
+    }
   }
 };
 

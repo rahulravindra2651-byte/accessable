@@ -133,6 +133,50 @@ export const extractFeatures = (lm) => {
     dist3D(pinkyTip, wrist)
   ) / 5 / palmSize;
 
+  // ── NEW: Palm Orientation (facing camera or away) ──────────────────────────
+  // Cross product of (indexMCP - wrist) × (pinkyMCP - wrist) gives palm normal
+  // If normal.z is negative, palm faces camera; if positive, palm faces away
+  const v1 = { x: indexMCP.x - wrist.x, y: indexMCP.y - wrist.y, z: (indexMCP.z || 0) - (wrist.z || 0) };
+  const v2 = { x: pinkyMCP.x - wrist.x, y: pinkyMCP.y - wrist.y, z: (pinkyMCP.z || 0) - (wrist.z || 0) };
+  const palmNormalZ = v1.x * v2.y - v1.y * v2.x;
+  const palmFacingCamera = palmNormalZ < 0;
+
+  // ── NEW: Hand Orientation (horizontal vs vertical) ────────────────────────
+  // Angle of wrist→midMCP vector relative to vertical (Y axis)
+  const handVecX = midMCP.x - wrist.x;
+  const handVecY = midMCP.y - wrist.y;
+  const wristAngle = Math.atan2(Math.abs(handVecX), -handVecY); // 0 = vertical, π/2 = horizontal
+  const handIsHorizontal = wristAngle > (Math.PI / 4); // > 45° from vertical
+
+  // ── NEW: Hand Height in Frame ─────────────────────────────────────────────
+  // 0 = top of frame, 1 = bottom of frame (using wrist y coordinate)
+  const handHeightRatio = wrist.y; // MediaPipe normalizes to 0–1
+
+  // ── NEW: Thumb Position Relative to Index MCP ─────────────────────────────
+  // Distinguishes A (thumb alongside) vs S (thumb across front) vs T (thumb between)
+  const thumbTipToIndexMCP = dist3D(thumbTip, indexMCP) / palmSize;
+  // Does thumb tip cross in front of index MCP (x-axis check)?
+  // In mirrored camera view, "crossing" means thumb moves toward the other fingers
+  const thumbCrossesIndex = Math.abs(thumbTip.x - indexMCP.x) < 0.03 ||
+    (thumbTip.x > indexMCP.x && thumbTip.x < midMCP.x) ||
+    (thumbTip.x < indexMCP.x && thumbTip.x > midMCP.x);
+
+  // ── NEW: Finger Tightness (how close the 4 finger tips are to each other) ─
+  // Low value = tips bunched together (FOOD), higher = tips spread (O shape)
+  const fingerTightness = (
+    dist3D(indexTip, midTip) +
+    dist3D(midTip,   ringTip) +
+    dist3D(ringTip,  pinkyTip)
+  ) / 3 / palmSize;
+
+  // ── NEW: Combined Curl Score (0 = all extended, 1 = all fully curled) ──────
+  const allFingersCurled = (
+    (1 - Math.min(indexCurl, 1)) +
+    (1 - Math.min(midCurl, 1)) +
+    (1 - Math.min(ringCurl, 1)) +
+    (1 - Math.min(pinkyCurl, 1))
+  ) / 4;
+
   return {
     // Raw landmark refs
     lm,
@@ -172,6 +216,17 @@ export const extractFeatures = (lm) => {
 
     // Compactness
     avgTipDist,
+
+    // NEW — Orientation & differentiation features
+    palmFacingCamera,     // true if palm faces camera
+    palmNormalZ,          // raw normal Z (continuous value)
+    handIsHorizontal,     // true if hand is rotated > 45° from vertical
+    wristAngle,           // radians from vertical (0 = up, π/2 = horizontal)
+    handHeightRatio,      // 0 = top, 1 = bottom of frame
+    thumbCrossesIndex,    // true if thumb crosses in front of index
+    thumbTipToIndexMCP,   // normalized distance thumb tip to index MCP
+    fingerTightness,      // how close 4 finger tips are (low = bunched)
+    allFingersCurled,     // combined curl score (high = all curled)
   };
 };
 
