@@ -20,8 +20,8 @@ const TOOLS = [
     id: 'form',
     icon: FileText,
     label: 'Voice Form Filling',
-    desc: 'OCR-assisted guided voice form filling & PDF download',
-    ariaLabel: 'Open Voice Form Assistant tool. Interactive form filling by voice and PDF download.',
+    desc: '100% voice-guided form filling, OCR assistance & PDF download',
+    ariaLabel: 'Open Voice Form Assistant tool. Complete forms entirely by voice or OCR scan.',
     gradient: 'from-violet-400 to-violet-600',
   },
   {

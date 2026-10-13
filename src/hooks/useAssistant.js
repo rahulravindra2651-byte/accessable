@@ -143,7 +143,7 @@ export const useAssistant = (language = 'en-US') => {
   };
 
   const listen = () => {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       if (typeof window === 'undefined') {
         return resolve('');
       }
@@ -158,14 +158,28 @@ export const useAssistant = (language = 'en-US') => {
       // 1. Immediately abort any existing recognition session to avoid duplicate listeners or busy hardware
       if (activeRecognitionInstance) {
         try {
+          activeRecognitionInstance.onend = null;
+          activeRecognitionInstance.onerror = null;
           activeRecognitionInstance.abort();
         } catch (e) {}
         activeRecognitionInstance = null;
+        // Wait 70ms for audio device to fully release in Web Speech API
+        await new Promise((r) => setTimeout(r, 70));
       }
 
       // 2. Stop speech synthesis if currently speaking
       if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
+      }
+
+      // 3. Request userMedia microphone access once so browser permission dialog triggers reliably
+      if (navigator?.mediaDevices?.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream.getTracks().forEach((track) => track.stop());
+        } catch (micErr) {
+          console.warn('[useAssistant] Microphone permission notice:', micErr.message);
+        }
       }
 
       setIsMicActive(true);
@@ -189,6 +203,8 @@ export const useAssistant = (language = 'en-US') => {
             activeRecognitionInstance = null;
           }
           try {
+            recognition.onend = null;
+            recognition.onerror = null;
             recognition.abort();
           } catch (e) {}
           resolve((value || '').trim());
@@ -197,10 +213,10 @@ export const useAssistant = (language = 'en-US') => {
 
       const timeoutId = setTimeout(() => {
         if (!resolved) {
-          console.warn('[useAssistant] Voice input timed out after 12s');
+          console.warn('[useAssistant] Voice input timeout after 14s');
           safeResolve(capturedFinal || capturedInterim || '');
         }
-      }, 12000);
+      }, 14000);
 
       recognition.onstart = () => {
         setIsMicActive(true);
@@ -233,8 +249,8 @@ export const useAssistant = (language = 'en-US') => {
           return;
         }
 
-        // B. If an interim result clearly matches an affirmative or negative confirmation intent (e.g. "yes", "no"),
-        // resolve immediately so the user NEVER has to say "Yes" twice or wait for silence timeouts!
+        // B. If an interim result clearly matches an affirmative or negative confirmation intent ("yes", "no"),
+        // resolve immediately so the user NEVER has to say "Yes" twice!
         if (candidate) {
           const quickIntent = detectConfirmationIntent(candidate);
           if (quickIntent === 'AFFIRMATIVE' || quickIntent === 'NEGATIVE') {
@@ -257,12 +273,25 @@ export const useAssistant = (language = 'en-US') => {
         }
       };
 
-      try {
-        recognition.start();
-      } catch (startErr) {
-        console.warn('[useAssistant] Recognition start exception:', startErr);
-        safeResolve('');
-      }
+      const attemptStart = () => {
+        try {
+          recognition.start();
+        } catch (startErr) {
+          console.warn('[useAssistant] Recognition start retry needed:', startErr.message);
+          setTimeout(() => {
+            if (!resolved) {
+              try {
+                recognition.start();
+              } catch (secondErr) {
+                console.warn('[useAssistant] Recognition second start error:', secondErr.message);
+                safeResolve('');
+              }
+            }
+          }, 100);
+        }
+      };
+
+      attemptStart();
     });
   };
 

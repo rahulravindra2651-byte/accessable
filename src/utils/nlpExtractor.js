@@ -71,32 +71,112 @@ const PATTERNS = [
   { field: 'pincode',     regex: /my (?:pin|pincode|zip|postal)(?: code)? is (\d+)/i },
 ];
 
+const SPOKEN_DIGIT_MAP = {
+  zero: '0', oh: '0', nil: '0', null: '0',
+  one: '1', two: '2', three: '3', four: '4', five: '5',
+  six: '6', seven: '7', eight: '8', nine: '9',
+  ten: '10', eleven: '11', twelve: '12', thirteen: '13', fourteen: '14', fifteen: '15',
+  sixteen: '16', seventeen: '17', eighteen: '18', nineteen: '19',
+  twenty: '20', thirty: '30', forty: '40', fifty: '50', sixty: '60', seventy: '70', eighty: '80', ninety: '90',
+  hundred: '00', thousand: '000',
+};
+
+/**
+ * Converts natural spoken words ("nine eight seven six...") into digits ("9876...").
+ * Handles doubles, triples, and spoken compound numbers like "twenty five".
+ */
+export const wordsToNumbers = (raw) => {
+  if (!raw) return '';
+  let str = String(raw).toLowerCase();
+
+  // "double 8" -> "8 8", "triple 9" -> "9 9 9"
+  str = str.replace(/\bdouble\s+([a-z0-9]+)\b/gi, '$1 $1');
+  str = str.replace(/\btriple\s+([a-z0-9]+)\b/gi, '$1 $1 $1');
+
+  // Compound numbers: "twenty five" -> 25
+  const tens = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+  const ones = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
+  for (const [tWord, tVal] of Object.entries(tens)) {
+    for (const [oWord, oVal] of Object.entries(ones)) {
+      const rx = new RegExp(`\\b${tWord}[-\\s]+${oWord}\\b`, 'gi');
+      str = str.replace(rx, String(tVal + oVal));
+    }
+  }
+
+  // Individual digit replacements
+  for (const [word, digit] of Object.entries(SPOKEN_DIGIT_MAP)) {
+    const rx = new RegExp(`\\b${word}\\b`, 'gi');
+    str = str.replace(rx, digit);
+  }
+
+  // Collapse spaces between adjacent numeric digits (e.g. "9 8 7" -> "987")
+  while (/(\d)\s+(\d)/.test(str)) {
+    str = str.replace(/(\d)\s+(\d)/g, '$1$2');
+  }
+
+  return str;
+};
+
 /**
  * Clean up spoken values based on the field type.
  * e.g., email "rahul at gmail dot com" -> "rahul@gmail.com"
- * e.g., phone "9 8 7 6 5 4 3 2 1 0" -> "9876543210"
+ * e.g., phone "nine eight seven six five four three two one zero" -> "9876543210"
+ * e.g., name "My name is Rahul Sharma" -> "Rahul Sharma"
  */
 export const cleanSpokenValue = (field, rawText) => {
   if (!rawText) return '';
-  let text = rawText.trim();
+  let text = String(rawText).trim();
   const lowerField = (field || '').toLowerCase();
 
-  if (lowerField.includes('email')) {
+  // Strip common voice lead-ins when speaking field answers
+  if (lowerField.includes('name')) {
+    text = text.replace(/^(?:my\s+(?:full\s+)?name\s+is|i\s+am\s+called|call\s+me|i\s+am|this\s+is|it\s+is|it's)\s+/i, '');
+    text = text.replace(/[.,;!]+$/, '').trim();
     return text
-      .toLowerCase()
-      .replace(/\s+at\s+/g, '@')
-      .replace(/\s+dot\s+/g, '.')
-      .replace(/\s+/g, '');
+      .split(' ')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
   }
 
-  if (lowerField.includes('phone') || lowerField.includes('mobile') || lowerField.includes('contact')) {
-    const digits = text.replace(/\D/g, '');
+  if (lowerField.includes('email') || lowerField.includes('mail')) {
+    text = text.replace(/^(?:my\s+email(?:\s+address)?\s+is|email(?:\s+address)?\s+is|it\s+is|it's)\s+/i, '');
+    return text
+      .toLowerCase()
+      .replace(/\s+at\s+the\s+rate\s+/g, '@')
+      .replace(/\s+at\s+/g, '@')
+      .replace(/\s+dot\s+/g, '.')
+      .replace(/\s+/g, '')
+      .replace(/[.,;!]+$/, '');
+  }
+
+  if (lowerField.includes('phone') || lowerField.includes('mobile') || lowerField.includes('contact') || lowerField.includes('tel')) {
+    text = text.replace(/^(?:my\s+(?:phone|mobile|contact)(?:\s+number)?\s+is|phone(?:\s+number)?\s+is|number\s+is|it\s+is|it's)\s+/i, '');
+    const converted = wordsToNumbers(text);
+    const digits = converted.replace(/\D/g, '');
     return digits || text;
   }
 
-  if (lowerField.includes('age') || lowerField.includes('pincode') || lowerField.includes('zip') || lowerField.includes('pin')) {
-    const digits = text.match(/\d+/g);
-    if (digits) return digits.join('');
+  if (lowerField.includes('age')) {
+    text = text.replace(/^(?:my\s+age\s+is|i\s+am|it\s+is|it's)\s+/i, '');
+    text = text.replace(/\s+years?(?:\s+old)?$/i, '');
+    const converted = wordsToNumbers(text);
+    const digits = converted.match(/\d+/);
+    if (digits) return digits[0];
+    return text;
+  }
+
+  if (lowerField.includes('pincode') || lowerField.includes('zip') || lowerField.includes('pin') || lowerField.includes('postal')) {
+    text = text.replace(/^(?:my\s+(?:pin|pincode|zip|postal)(?:\s+code)?\s+is|it\s+is|it's)\s+/i, '');
+    const converted = wordsToNumbers(text);
+    const digits = converted.replace(/\D/g, '');
+    if (digits) return digits;
+    return text;
+  }
+
+  if (lowerField.includes('date') || lowerField.includes('dob') || lowerField.includes('birth')) {
+    text = text.replace(/^(?:my\s+(?:date\s+of\s+birth|dob|birthday)\s+is|i\s+was\s+born\s+on|it\s+is|it's)\s+/i, '');
+    text = text.replace(/[.,;!]+$/, '').trim();
+    return text;
   }
 
   if (lowerField.includes('gender')) {
@@ -105,7 +185,7 @@ export const cleanSpokenValue = (field, rawText) => {
     if (/\b(other|non.binary|transgender)\b/i.test(text)) return 'Other';
   }
 
-  // Capitalize title case for names, cities, states, addresses
+  // Capitalize title case for general text (address, occupation, city, etc.)
   return text
     .split(' ')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
