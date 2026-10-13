@@ -18,11 +18,9 @@ const userSchema = new mongoose.Schema(
       match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address'],
     },
     password: {
-      // Optional — Google OAuth users have no password
       type: String,
-      required: false,
+      required: [true, 'Password is required'],
       minlength: 6,
-      default: null,
     },
     role: {
       type: String,
@@ -30,28 +28,13 @@ const userSchema = new mongoose.Schema(
       required: true,
       default: 'regular',
     },
-    // Google OAuth fields
-    googleId: {
-      type: String,
-      default: null,
-      index: true,
-    },
-    picture: {
-      // Google profile photo URL
-      type: String,
-      default: null,
-    },
-    authProvider: {
-      // 'local' | 'google'
-      type: String,
-      enum: ['local', 'google'],
-      default: 'local',
-    },
   },
   {
     timestamps: true,
     collection: '6p1',
   }
 );
+
+userSchema.index({ email: 1 }, { unique: true });
 
 module.exports = mongoose.models.User || mongoose.model('User', userSchema);

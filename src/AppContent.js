@@ -1,6 +1,6 @@
 import React, { useContext, useState } from 'react';
-import { AuthContext } from '../../context/AuthContext';
-import { ThemeContext } from '../../context/ThemeContext';
+import { AuthContext } from './context/AuthContext';
+import { ThemeContext } from './context/ThemeContext';
 import LandingPage  from './pages/LandingPage';
 import Login        from './components/auth/Login';
 import Register     from './components/auth/Register';

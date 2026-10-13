@@ -1,6 +1,5 @@
 import React, { useState, useContext, useEffect, useRef } from 'react';
-import { GoogleLogin } from '@react-oauth/google';
-import { Eye, EyeOff, Mail, Lock, ArrowRight, Mic, Volume2, Sparkles } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, ArrowRight, Mic, Volume2 } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { AccessibilityContext } from '../../context/AccessibilityContext';
 
@@ -12,14 +11,13 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeListeningField, setActiveListeningField] = useState(null);
   const activeRecognitionRef = useRef(null);
 
   useEffect(() => {
     speakGuidance(
-      'Welcome to AccessAble. You are on the Sign In page. Enter your email and password, or use Continue with Google.',
+      'Welcome to AccessAble. You are on the Sign In page. Enter your email and password.',
       'polite'
     );
   }, [speakGuidance]);
@@ -81,11 +79,12 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!email || !password) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password) {
       const msg = 'Please fill in all required fields.';
       setError(msg); speakGuidance(msg, 'assertive'); return;
     }
-    if (!email.includes('@')) {
+    if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
       const msg = 'Please enter a valid email address.';
       setError(msg); speakGuidance(msg, 'assertive'); return;
     }
@@ -95,7 +94,7 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email: cleanEmail, password }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -110,42 +109,6 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  /* ── Google OAuth success ── */
-  const handleGoogleSuccess = async (credentialResponse) => {
-    setError('');
-    setIsGoogleLoading(true);
-    speakGuidance('Verifying your Google account, please wait.', 'polite');
-    try {
-      const res = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential: credentialResponse.credential }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const msg = data.needsRole
-          ? 'No AccessAble account found for this Google account. Please register and choose your account type first.'
-          : data.message || 'Google sign-in failed.';
-        setError(msg);
-        speakGuidance(msg, 'assertive');
-        return;
-      }
-      speakGuidance(`Google sign-in successful. Welcome back ${data.user.name}.`, 'assertive');
-      login(data.user, data.token);
-    } catch {
-      const msg = 'Unable to connect to server. Please try again.';
-      setError(msg); speakGuidance(msg, 'assertive');
-    } finally {
-      setIsGoogleLoading(false);
-    }
-  };
-
-  const handleGoogleError = () => {
-    const msg = 'Google sign-in was cancelled or failed. Please try again.';
-    setError(msg);
-    speakGuidance(msg, 'assertive');
   };
 
   return (
@@ -200,7 +163,7 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
             </div>
             <button
               type="button"
-              onClick={() => speakGuidance('Sign In form. Enter email address and password, or use Continue with Google.', 'assertive')}
+              onClick={() => speakGuidance('Sign In form. Enter email address and password.', 'assertive')}
               className="clay-pill text-xs py-1.5 px-3 flex items-center gap-1.5 text-[#7C3AED]"
               aria-label="Read form guidance aloud"
             >
@@ -208,74 +171,35 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
             </button>
           </div>
 
-          {/* ── Google Sign-In ── */}
-          <div className="mb-6">
-            <div className="flex justify-center" role="group" aria-label="Sign in with Google">
-              {isGoogleLoading ? (
-                <div
-                  className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl bg-white shadow-clayPill text-sm font-bold text-[#635F69]"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <div className="w-4 h-4 border-2 border-purple-400 border-t-[#7C3AED] rounded-full anim-spin" />
-                  Verifying with Google…
-                </div>
-              ) : (
-                <div className="w-full flex justify-center shadow-clayPill rounded-2xl overflow-hidden p-1 bg-white">
-                  <GoogleLogin
-                    onSuccess={handleGoogleSuccess}
-                    onError={handleGoogleError}
-                    useOneTap={false}
-                    text="signin_with"
-                    shape="rectangular"
-                    width="100%"
-                    theme="outline"
-                    size="large"
-                    logo_alignment="left"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── Divider ── */}
-          <div className="relative flex items-center gap-3 mb-6">
-            <div className="flex-1 h-px bg-[#d9d4e3]" />
-            <span className="text-xs font-bold uppercase tracking-wider text-[#635F69] px-2">
-              or with email
-            </span>
-            <div className="flex-1 h-px bg-[#d9d4e3]" />
-          </div>
-
           {/* ── Email/Password Form ── */}
           <form onSubmit={handleSubmit} className="space-y-6" noValidate>
             {/* Email Field */}
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between gap-2 mb-2">
                 <label htmlFor="login-email" className="clay-font-heading text-sm font-extrabold text-[#332F3A]">
                   Email Address <span className="text-[#DB2777]">*</span>
                 </label>
                 <button
                   type="button"
                   onClick={() => listenForField('email', setEmail)}
-                  className={`clay-pill text-xs py-1 px-2.5 flex items-center gap-1 ${
-                    activeListeningField === 'email' ? 'bg-[#DB2777] text-white' : 'text-[#7C3AED]'
+                  className={`clay-pill text-xs h-7 px-3 inline-flex items-center justify-center gap-1.5 font-bold shrink-0 transition-all ${
+                    activeListeningField === 'email' ? 'bg-[#DB2777] text-white shadow-sm' : 'text-[#7C3AED] hover:bg-[#7C3AED]/10'
                   }`}
                   aria-label="Speak email address"
                 >
-                  <Mic size={12} className={activeListeningField === 'email' ? 'animate-pulse' : ''} />
-                  {activeListeningField === 'email' ? 'Listening…' : 'Speak'}
+                  <Mic size={13} className={activeListeningField === 'email' ? 'animate-pulse' : ''} />
+                  <span>{activeListeningField === 'email' ? 'Listening…' : 'Speak'}</span>
                 </button>
               </div>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[#635F69]" size={18} aria-hidden="true" />
+              <div className="relative flex items-center">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-[#635F69] pointer-events-none z-10" size={18} aria-hidden="true" />
                 <input
                   id="login-email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   onFocus={() => speakGuidance('Email address edit box. Required.', 'polite')}
-                  className="clay-input pl-11"
+                  className="clay-input has-icon-left pl-11"
                   placeholder="you@example.com"
                   autoComplete="email"
                   required
@@ -286,31 +210,31 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
 
             {/* Password Field */}
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between gap-2 mb-2">
                 <label htmlFor="login-password" className="clay-font-heading text-sm font-extrabold text-[#332F3A]">
                   Password <span className="text-[#DB2777]">*</span>
                 </label>
                 <button
                   type="button"
                   onClick={() => listenForField('password', setPassword)}
-                  className={`clay-pill text-xs py-1 px-2.5 flex items-center gap-1 ${
-                    activeListeningField === 'password' ? 'bg-[#DB2777] text-white' : 'text-[#7C3AED]'
+                  className={`clay-pill text-xs h-7 px-3 inline-flex items-center justify-center gap-1.5 font-bold shrink-0 transition-all ${
+                    activeListeningField === 'password' ? 'bg-[#DB2777] text-white shadow-sm' : 'text-[#7C3AED] hover:bg-[#7C3AED]/10'
                   }`}
                   aria-label="Speak password"
                 >
-                  <Mic size={12} className={activeListeningField === 'password' ? 'animate-pulse' : ''} />
-                  {activeListeningField === 'password' ? 'Listening…' : 'Speak'}
+                  <Mic size={13} className={activeListeningField === 'password' ? 'animate-pulse' : ''} />
+                  <span>{activeListeningField === 'password' ? 'Listening…' : 'Speak'}</span>
                 </button>
               </div>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#635F69]" size={18} aria-hidden="true" />
+              <div className="relative flex items-center">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#635F69] pointer-events-none z-10" size={18} aria-hidden="true" />
                 <input
                   id="login-password"
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onFocus={() => speakGuidance('Password edit box. Required.', 'polite')}
-                  className="clay-input pl-11 pr-12"
+                  className="clay-input has-icon-left has-icon-right pl-11 pr-12"
                   placeholder="Enter your password"
                   autoComplete="current-password"
                   required
@@ -319,7 +243,7 @@ const Login = ({ onSwitchToRegister, onBackToLanding }) => {
                 <button
                   type="button"
                   onClick={() => setShowPw((v) => !v)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#635F69] hover:text-[#7C3AED] transition-colors p-1"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#635F69] hover:text-[#7C3AED] transition-colors p-1.5 rounded-lg z-10"
                   aria-label={showPw ? 'Hide password' : 'Show password'}
                 >
                   {showPw ? <EyeOff size={18} /> : <Eye size={18} />}

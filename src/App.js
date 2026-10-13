@@ -1,5 +1,4 @@
 import React, { useContext, useState } from 'react';
-import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
@@ -11,10 +10,6 @@ import AssistantMode from './components/impaired/AssistantMode';
 import TranslatorMode from './components/regular/TranslatorMode';
 import Navbar from './components/layout/Navbar';
 import './App.css';
-
-// Google Client ID — set REACT_APP_GOOGLE_CLIENT_ID in your .env file
-// In Render: add it to the Environment Variables dashboard
-const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
 
 function AppContent() {
   const { user } = useContext(AuthContext);
@@ -59,17 +54,15 @@ function AppContent() {
 
 function App() {
   return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <ThemeProvider>
-        <AuthProvider>
-          <AccessibilityProvider>
-            <ToastProvider>
-              <AppContent />
-            </ToastProvider>
-          </AccessibilityProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </GoogleOAuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AccessibilityProvider>
+          <ToastProvider>
+            <AppContent />
+          </ToastProvider>
+        </AccessibilityProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

@@ -145,20 +145,12 @@ export const humaniseField = (fieldName) => {
     .trim();
 };
 
-const AFFIRMATIVE_WORDS = [
-  'yes', 'yeah', 'yep', 'yup', 'sure', 'ok', 'okay',
-  'continue', 'proceed', 'start', 'confirm', 'affirmative',
-  'haan', 'ha', 'go ahead', 'do it', 'positive', 'right', 'correct'
-];
-
-const NEGATIVE_WORDS = [
-  'no', 'nope', 'not', 'wrong', 'incorrect', 'cancel',
-  'stop', 'dont', "don't", 'negative', 'exit', 'abort'
-];
+const AFFIRMATIVE_REGEX = /\b(yes|yeah|yep|yup|sure|ok|okay|continue|proceed|start|confirm|affirmative|haan|ha|go ahead|do it|positive|right|correct)\b/i;
+const NEGATIVE_REGEX = /\b(no|nope|not|wrong|incorrect|cancel|stop|dont|don't|negative|exit|abort)\b/i;
 
 /**
  * Classifies speech transcript into 'AFFIRMATIVE', 'NEGATIVE', or 'UNRECOGNIZED'.
- * Prints detailed debug logs showing raw transcript, processed string, detected intent, and boolean values.
+ * Uses precise word boundaries to prevent substring collisions (e.g. 'what' containing 'ha').
  * @param {string} transcript — raw speech recognition output
  * @returns {'AFFIRMATIVE' | 'NEGATIVE' | 'UNRECOGNIZED'}
  */
@@ -166,21 +158,15 @@ export const detectConfirmationIntent = (transcript) => {
   const raw = transcript || '';
   const processed = raw.trim().toLowerCase();
 
-  console.group('🎙️ [Voice Intent Debugger]');
-  console.log('• Raw Speech Output:', JSON.stringify(raw));
-  console.log('• Processed Transcript:', JSON.stringify(processed));
-
   if (!processed) {
-    console.log('• Intent Detected: UNRECOGNIZED (Empty speech output)');
-    console.log('• Booleans -> isAffirmative: false, isNegative: false');
-    console.groupEnd();
     return 'UNRECOGNIZED';
   }
 
-  const isAffirmative = AFFIRMATIVE_WORDS.some((word) => processed.includes(word));
-  const isNegative = NEGATIVE_WORDS.some((word) => processed.includes(word));
+  const affMatch = AFFIRMATIVE_REGEX.exec(processed);
+  const negMatch = NEGATIVE_REGEX.exec(processed);
 
-  console.log('• Booleans -> isAffirmative:', isAffirmative, '| isNegative:', isNegative);
+  const isAffirmative = Boolean(affMatch);
+  const isNegative = Boolean(negMatch);
 
   let intent = 'UNRECOGNIZED';
   if (isAffirmative && !isNegative) {
@@ -188,15 +174,9 @@ export const detectConfirmationIntent = (transcript) => {
   } else if (isNegative && !isAffirmative) {
     intent = 'NEGATIVE';
   } else if (isAffirmative && isNegative) {
-    const affIndices = AFFIRMATIVE_WORDS.map((w) => processed.indexOf(w)).filter((i) => i !== -1);
-    const negIndices = NEGATIVE_WORDS.map((w) => processed.indexOf(w)).filter((i) => i !== -1);
-    const firstAff = Math.min(...affIndices);
-    const firstNeg = Math.min(...negIndices);
-    intent = firstAff < firstNeg ? 'AFFIRMATIVE' : 'NEGATIVE';
+    // Whichever appears first in speech takes precedence
+    intent = affMatch.index <= negMatch.index ? 'AFFIRMATIVE' : 'NEGATIVE';
   }
-
-  console.log('• Final Detected Intent:', intent);
-  console.groupEnd();
 
   return intent;
 };

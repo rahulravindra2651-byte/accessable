@@ -1066,13 +1066,30 @@ video {
   color: var(--clay-foreground);
   font-family: var(--font-clay-body);
   font-size: 1.05rem;
-  padding: 1rem 1.4rem;
+  padding: 0.95rem 1.4rem;
   border: 0;
   box-shadow: 
     inset 8px 8px 16px #d9d4e3,
     inset -8px -8px 16px #ffffff;
   transition: all 0.25s ease;
   outline: none;
+  box-sizing: border-box;
+}
+
+/* Explicit left padding for inputs with an icon inside so text never overlaps */
+.clay-input.has-icon-left,
+.clay-input.pl-11,
+.clay-input.pl-12,
+.clay-input-icon-left {
+  padding-left: 3.1rem !important;
+}
+
+/* Explicit right padding for inputs with a button or toggle inside so text never overlaps */
+.clay-input.has-icon-right,
+.clay-input.pr-12,
+.clay-input.pr-14,
+.clay-input-icon-right {
+  padding-right: 3.25rem !important;
 }
 
 .clay-input:focus {

@@ -3,7 +3,6 @@ import { Mic, Eye, FileText, Sparkles } from 'lucide-react';
 import LiveCaptions from './LiveCaptions';
 import OCRScanner from './OCRScanner';
 import VoiceForm from './VoiceForm';
-import EmergencyButton from './EmergencyButton';
 import PageReaderControls from '../ui/PageReaderControls';
 import { AuthContext } from '../../context/AuthContext';
 import { AccessibilityContext } from '../../context/AccessibilityContext';
@@ -21,8 +20,8 @@ const TOOLS = [
     id: 'form',
     icon: FileText,
     label: 'Voice Form Filling',
-    desc: 'Conversational NLP-powered voice form assistant',
-    ariaLabel: 'Open Voice Form Assistant tool. Interactive form filling by voice.',
+    desc: 'OCR-assisted guided voice form filling & PDF download',
+    ariaLabel: 'Open Voice Form Assistant tool. Interactive form filling by voice and PDF download.',
     gradient: 'from-violet-400 to-violet-600',
   },
   {
@@ -137,11 +136,6 @@ const AssistantMode = () => {
                 </button>
               );
             })}
-
-            {/* Emergency Button Block */}
-            <div className="mt-6 pt-4">
-              <EmergencyButton />
-            </div>
           </nav>
 
           {/* Main Active Tool Display Panel */}

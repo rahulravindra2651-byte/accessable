@@ -1,12 +1,13 @@
-const express   = require('express');
-const cors      = require('cors');
-const helmet    = require('helmet');
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const path      = require('path');
-const dotenv    = require('dotenv');
+const path = require('path');
+const dotenv = require('dotenv');
 const connectDB = require('./config/db');
-const authRoutes    = require('./routes/auth');
+const authRoutes = require('./routes/auth');
 const gestureRoutes = require('./routes/gesture');
+const formRoutes = require('./routes/form');
 
 dotenv.config();
 connectDB();
@@ -66,8 +67,9 @@ const authLimiter = rateLimit({
 });
 
 /* ── Routes ── */
-app.use('/api/auth',     authLimiter, authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/gestures', gestureRoutes);
+app.use('/api/forms', formRoutes);
 
 /* ── Health check ── */
 app.get('/api/health', (req, res) =>
@@ -80,6 +82,9 @@ if (process.env.NODE_ENV === 'production') {
   console.log('[Production] Serving static files from:', buildPath);
   app.use(express.static(buildPath));
   app.get('*', (req, res) => {
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ message: 'API endpoint not found' });
+    }
     res.sendFile(path.join(buildPath, 'index.html'));
   });
 }

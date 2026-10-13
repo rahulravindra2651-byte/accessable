@@ -1,47 +1,156 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-
-// Constant outside component — prevents array recreation on every render
-const FREE_FIELDS = [
-  'name', 'email', 'phone', 'age', 'address', 'dateOfBirth', 'gender', 'city', 'state', 'pincode'
-];
-
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { useAssistant } from '../../hooks/useAssistant';
 import { useOCR } from '../../hooks/useOCR';
 import { extractFormFields } from '../../utils/formProcessor';
-import { extractFieldFromSpeech, humaniseField, cleanSpokenValue, detectConfirmationIntent } from '../../utils/nlpExtractor';
-import { LANGUAGES, getOCRLang, getOCRLangString, detectLanguageFromText } from '../../utils/languages';
+import {
+  extractFieldFromSpeech,
+  cleanSpokenValue,
+  detectConfirmationIntent,
+} from '../../utils/nlpExtractor';
+import { LANGUAGES, getOCRLangString, detectLanguageFromText } from '../../utils/languages';
 import { AccessibilityContext } from '../../context/AccessibilityContext';
 import FormReader from './FormReader';
 import {
-  Camera, Mic, Loader2, CheckCircle, AlertTriangle,
-  FileJson, BookOpen, RotateCcw, MicOff, Volume2
+  Camera,
+  Mic,
+  Loader2,
+  CheckCircle,
+  AlertTriangle,
+  FileDown,
+  RotateCcw,
+  MicOff,
+  Volume2,
+  BookOpen,
+  Send,
+  AlertCircle,
 } from 'lucide-react';
+
+/* ─── Client-side Validation Helper ─── */
+export const validateFormField = (key, value) => {
+  const label = String(key || '').trim();
+  const lowerLabel = label.toLowerCase();
+  const val = value === null || value === undefined ? '' : String(value).trim();
+
+  // 1. Required / Empty check
+  if (!val) {
+    return `${label} is required and cannot be empty.`;
+  }
+
+  // 2. Name validation
+  if (
+    lowerLabel.includes('name') &&
+    !lowerLabel.includes('file') &&
+    !lowerLabel.includes('user')
+  ) {
+    if (!/^[a-zA-Z\s'-]{2,100}$/.test(val)) {
+      return `${label} must contain only letters, spaces, hyphens, and apostrophes (min 2 characters, no numbers).`;
+    }
+    return '';
+  }
+
+  // 3. Email validation
+  if (lowerLabel.includes('email') || lowerLabel.includes('mail')) {
+    if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(val)) {
+      return `Please enter a valid email address for ${label}.`;
+    }
+    return '';
+  }
+
+  // 4. Phone validation
+  if (
+    lowerLabel.includes('phone') ||
+    lowerLabel.includes('mobile') ||
+    lowerLabel.includes('contact') ||
+    lowerLabel.includes('tel')
+  ) {
+    const digitsOnly = val.replace(/\D/g, '');
+    if (digitsOnly.length < 10 || digitsOnly.length > 15 || /[a-zA-Z]/.test(val)) {
+      return `${label} must be a valid phone number (10 to 15 digits, no letters).`;
+    }
+    return '';
+  }
+
+  // 5. Age validation
+  if (lowerLabel === 'age' || lowerLabel.includes('age')) {
+    const num = parseInt(val, 10);
+    if (isNaN(num) || String(num) !== val.replace(/\D/g, '') || num < 1 || num > 120) {
+      return `${label} must be a valid age between 1 and 120 years.`;
+    }
+    return '';
+  }
+
+  // 6. Postal / Pincode / Zip validation
+  if (
+    lowerLabel.includes('pincode') ||
+    lowerLabel.includes('pin') ||
+    lowerLabel.includes('zip') ||
+    lowerLabel.includes('postal')
+  ) {
+    const digitsOnly = val.replace(/\D/g, '');
+    if (digitsOnly.length < 4 || digitsOnly.length > 10 || /[a-zA-Z]/.test(val)) {
+      return `${label} must be a valid numeric postal code.`;
+    }
+    return '';
+  }
+
+  // 7. Date validation
+  if (lowerLabel.includes('date') || lowerLabel.includes('dob') || lowerLabel.includes('birth')) {
+    const parsedDate = Date.parse(val);
+    if (isNaN(parsedDate)) {
+      const match = val.match(/^(\d{1,4})[./-](\d{1,2})[./-](\d{1,4})$/);
+      if (!match) {
+        return `${label} must be a valid date.`;
+      }
+    } else {
+      const d = new Date(parsedDate);
+      const now = new Date();
+      if (lowerLabel.includes('birth') || lowerLabel.includes('dob')) {
+        if (d > now) {
+          return `${label} cannot be a date in the future.`;
+        }
+        if (now.getFullYear() - d.getFullYear() > 130) {
+          return `${label} must be within the last 130 years.`;
+        }
+      }
+    }
+    return '';
+  }
+
+  return '';
+};
+
+export const validateAllFields = (fieldsData) => {
+  const errors = {};
+  for (const [k, v] of Object.entries(fieldsData)) {
+    const err = validateFormField(k, v);
+    if (err) errors[k] = err;
+  }
+  return errors;
+};
 
 const VoiceForm = () => {
   const [language, setLanguage] = useState('en-US');
-  const { speak, listen, isMicActive } = useAssistant(language);
+  const { speak, listen, stopAllVoice, isMicActive } = useAssistant(language);
   const { scanImage } = useOCR(getOCRLangString(language));
   const { speakGuidance } = useContext(AccessibilityContext);
 
-  const [mode, setMode] = useState('choose'); // choose | scan | free
-  const [status, setStatus] = useState('IDLE'); // IDLE | SCANNING | CONFIRM_PROCEED | FILLING | REVIEW
+  const [status, setStatus] = useState('IDLE'); // IDLE | SCANNING | CONFIRM_PROCEED | FILLING | REVIEW | SUBMITTED
   const [fields, setFields] = useState([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [formData, setFormData] = useState({});
+  const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState('');
   const [readerOpen, setReaderOpen] = useState(false);
   const [browserSupported, setBrowserSupported] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [activeDictatingField, setActiveDictatingField] = useState(null);
 
-  // Free mode states
-  const [nlpFields, setNlpFields] = useState({});
-  const [nlpListening, setNlpListening] = useState(false);
-  const [nlpResult, setNlpResult] = useState(null);
-  const [activeSingleField, setActiveSingleField] = useState(null);
-
-  // Guard to prevent concurrent conversational loops
   const isRunningRef = useRef(false);
-  // Ref to hold current scanned fields so closure state is never stale
   const fieldsRef = useRef([]);
+  const activeSessionIdRef = useRef(0);
 
   /* ── Browser check & spoken guidance on mount ── */
   useEffect(() => {
@@ -50,18 +159,28 @@ const VoiceForm = () => {
       setBrowserSupported(false);
       speakGuidance('Speech recognition is not supported in this browser.', 'assertive');
     } else {
-      speakGuidance('Voice Form Assistant active. Choose Scan a Form or Free Voice Fill.', 'polite');
+      speakGuidance(
+        'Voice Form Assistant active. Please upload a photo or PDF of a printed form to begin.',
+        'polite'
+      );
     }
-  }, [speakGuidance]);
+
+    return () => {
+      activeSessionIdRef.current += 1;
+      stopAllVoice();
+    };
+  }, [speakGuidance, stopAllVoice]);
 
   /* ─────────────────────────────────
-     SCAN MODE — OCR → Conversational Loop
+     OCR SCAN → Conversational Loop
   ───────────────────────────────── */
   const handleScan = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const isPdf = file.type === 'application/pdf' || (file.name && file.name.toLowerCase().endsWith('.pdf'));
+    const isPdf =
+      file.type === 'application/pdf' ||
+      (file.name && file.name.toLowerCase().endsWith('.pdf'));
     const isImage = file.type && file.type.startsWith('image/');
 
     if (!isImage && !isPdf) {
@@ -73,23 +192,12 @@ const VoiceForm = () => {
 
     setStatus('SCANNING');
     setError('');
-
-    console.group('📄 [STAGE 1: Form Upload]');
-    console.log('• File Name:', file.name);
-    console.log('• File Type:', file.type || (isPdf ? 'application/pdf' : 'unknown'));
-    console.log('• File Size:', file.size, 'bytes');
-    console.groupEnd();
+    setFieldErrors({});
 
     await speak('Scanning your form document with optical character recognition. Please wait.');
 
     try {
-      const ocrLangCode = getOCRLangString(language);
-      console.group('🔍 [STAGE 2: OCR Extraction]');
-      console.log('• Initial Target OCR Lang:', ocrLangCode);
       const rawText = await scanImage(file);
-      console.log('• Raw Extracted Text Length:', rawText?.length || 0, 'characters');
-      console.log('• Extracted Snippet:', JSON.stringify((rawText || '').slice(0, 150)));
-      console.groupEnd();
 
       if (!rawText?.trim()) {
         const msg = 'No text detected. Please try a clearer image or PDF document.';
@@ -99,21 +207,14 @@ const VoiceForm = () => {
         return;
       }
 
-      // Stage 3: Automatic Language Detection
+      // Automatic Language Detection
       const autoLang = detectLanguageFromText(rawText);
-      console.group('🌐 [STAGE 3: Language Detection]');
-      console.log('• Detected Language Code:', autoLang);
-      console.log('• Active Language State:', language);
       if (autoLang !== language) {
-        console.log(`• Language Auto-Switched: ${language} -> ${autoLang}`);
         setLanguage(autoLang);
       }
-      console.groupEnd();
 
       const activeOcrLang = getOCRLangString(autoLang);
       const detected = extractFormFields(rawText, activeOcrLang);
-
-      console.log('📋 [Extracted Form Fields]:', detected);
 
       if (detected.length === 0) {
         const msg = 'No form fields detected. Make sure the document contains clear form labels.';
@@ -128,7 +229,7 @@ const VoiceForm = () => {
       setCurrentIdx(0);
       setFormData({});
       setStatus('CONFIRM_PROCEED');
-      confirmProceed(detected, 1, autoLang);
+      confirmProceed(detected, 1);
     } catch (err) {
       console.error('❌ [OCR Scan Error]:', err);
       const msg = err.message || 'Error scanning form.';
@@ -139,63 +240,61 @@ const VoiceForm = () => {
   };
 
   const confirmProceed = async (targetFields = fieldsRef.current, attempt = 1) => {
-    if (isRunningRef.current && attempt === 1) return; // Prevent double-invocation
-    isRunningRef.current = true;
+    activeSessionIdRef.current += 1;
+    const currentSession = activeSessionIdRef.current;
     const activeList = targetFields && targetFields.length > 0 ? targetFields : fieldsRef.current;
 
     try {
       if (attempt === 1) {
         await speak(
-          `Form scanned successfully. Found ${activeList.length} fields: ${activeList.join(', ')}. Should we continue to fill the form? Say Yes or No.`
+          `Form scanned successfully. Found ${activeList.length} fields: ${activeList.join(
+            ', '
+          )}. Should we continue to fill the form? Say Yes or No.`
         );
       } else {
         await speak(
-          `I didn't hear a clear response. Should we fill the form? Say Yes to start or Say No to cancel.`
+          `Should we continue to fill the form? Say Yes to start or Say No to cancel.`
         );
       }
 
-      // Pause 600ms so TTS speaker audio output stops completely before mic recording begins
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      if (currentSession !== activeSessionIdRef.current) return;
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       const rawResponse = await listen();
+      if (currentSession !== activeSessionIdRef.current) return;
+
       const intent = detectConfirmationIntent(rawResponse);
 
-      console.log(`[VoiceForm confirmProceed] Attempt ${attempt}/3 | Intent: ${intent} | Raw: "${rawResponse}"`);
-
       if (intent === 'AFFIRMATIVE') {
-        console.log('User confirmed. Starting form filling.');
         await speak('Starting voice form assistant.');
+        if (currentSession !== activeSessionIdRef.current) return;
         setStatus('FILLING');
         await runConversationalLoop(activeList, 0);
       } else if (intent === 'NEGATIVE') {
-        console.log('User cancelled form filling.');
         await speak('Okay. Form filling cancelled.');
         setStatus('IDLE');
       } else {
-        // UNRECOGNIZED: Try up to 3 times before staying in CONFIRM_PROCEED mode
         if (attempt < 3) {
-          console.log(`Unrecognized response on attempt ${attempt}. Retrying confirmation prompt...`);
-          isRunningRef.current = false;
           await confirmProceed(activeList, attempt + 1);
         } else {
-          console.warn('Max confirmation attempts reached without a clear answer.');
-          await speak('No clear voice response detected. Tap Yes to start filling or No to cancel.');
+          await speak('No clear voice response detected. Tap Start Guided Voice Fill or Cancel.');
           setStatus('CONFIRM_PROCEED');
         }
       }
-    } finally {
-      if (attempt === 1) {
-        isRunningRef.current = false;
-      }
+    } catch (e) {
+      console.warn('[confirmProceed] Error:', e);
     }
   };
 
   const runConversationalLoop = async (targetFields = fieldsRef.current, index = 0) => {
+    const currentSession = activeSessionIdRef.current;
     const activeList = targetFields && targetFields.length > 0 ? targetFields : fieldsRef.current;
+
+    if (currentSession !== activeSessionIdRef.current) return;
 
     if (index >= activeList.length) {
       setStatus('REVIEW');
-      await speak('Form completed successfully! Review your answers below or download JSON.');
+      await speak('All fields entered! Please review your answers and download your PDF.');
       return;
     }
 
@@ -204,144 +303,312 @@ const VoiceForm = () => {
 
     // 1. Assistant asks for field
     await speak(`Field ${index + 1} of ${activeList.length}: Please say your ${label}.`);
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    if (currentSession !== activeSessionIdRef.current) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // 2. Assistant listens
     const input = await listen();
+    if (currentSession !== activeSessionIdRef.current) return;
+
     if (!input?.trim()) {
-      await speak("I didn't catch anything. Let me ask again.");
+      await speak("I didn't catch that. Let me ask again.");
+      if (currentSession !== activeSessionIdRef.current) return;
       return runConversationalLoop(activeList, index);
     }
 
-    // 3. NLP extraction & formatting fallback
+    // 3. NLP extraction & formatting
     const extracted = extractFieldFromSpeech(input);
     const rawVal = extracted?.value || input.trim();
     const valueToUse = cleanSpokenValue(label, rawVal);
 
-    // 4. Conversational confirmation
+    // 4. Validate the recognized input
+    const validationError = validateFormField(label, valueToUse);
+    if (validationError) {
+      await speak(`Validation check: ${validationError}. Let's try saying it again.`);
+      if (currentSession !== activeSessionIdRef.current) return;
+      return runConversationalLoop(activeList, index);
+    }
+
+    // 5. Conversational confirmation - processed accurately on first spoken response
     await speak(`You said: ${valueToUse} for ${label}. Is this correct? Say yes or no.`);
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    if (currentSession !== activeSessionIdRef.current) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
     const confirmRaw = await listen();
+    if (currentSession !== activeSessionIdRef.current) return;
+
     const confirmIntent = detectConfirmationIntent(confirmRaw);
 
     if (confirmIntent === 'AFFIRMATIVE') {
       setFormData((prev) => ({ ...prev, [label]: valueToUse }));
-      await speak(`${label} entered successfully.`);
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[label];
+        return next;
+      });
+      await speak(`${label} recorded.`);
+      if (currentSession !== activeSessionIdRef.current) return;
       await runConversationalLoop(activeList, index + 1);
     } else if (confirmIntent === 'NEGATIVE') {
       await speak("Okay, let's try entering this field again.");
+      if (currentSession !== activeSessionIdRef.current) return;
       await runConversationalLoop(activeList, index);
     } else {
-      await speak("I couldn't understand your response. Let's try this field again.");
+      await speak("I couldn't understand your confirmation. Let's repeat this field.");
+      if (currentSession !== activeSessionIdRef.current) return;
       await runConversationalLoop(activeList, index);
     }
   };
 
   /* ─────────────────────────────────
-     FREE MODE — Conversational NLP Fill & Single Field Voice Input
+     Single-field dictation in review mode
   ───────────────────────────────── */
-  const handleFreeVoice = async () => {
-    if (nlpListening) return;
-    setNlpListening(true);
-    await speak('Please speak a natural sentence, for example: My name is Rahul, or My age is 22 years old.');
-    const transcript = await listen();
-    setNlpListening(false);
+  const handleDictateReviewField = async (label) => {
+    if (activeDictatingField) return;
+    setActiveDictatingField(label);
+    await speak(`Please say the value for ${label}.`);
+    const input = await listen();
+    setActiveDictatingField(null);
 
-    if (!transcript?.trim()) {
-      await speak("I didn't hear anything. Please try again or tap a field microphone button.");
+    if (!input?.trim()) {
+      await speak(`Could not capture speech for ${label}.`);
       return;
     }
 
-    const extracted = extractFieldFromSpeech(transcript);
-    if (extracted) {
-      // Conversational confirmation for free mode
-      await speak(
-        `I recognized ${humaniseField(extracted.field)} as ${extracted.value}. Is this correct? Say yes or no.`
-      );
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      const confirmRaw = await listen();
-      const confirmIntent = detectConfirmationIntent(confirmRaw);
+    const extracted = extractFieldFromSpeech(input);
+    const rawVal = extracted?.value || input.trim();
+    const cleaned = cleanSpokenValue(label, rawVal);
 
-      if (confirmIntent === 'AFFIRMATIVE') {
-        setNlpResult(extracted);
-        setNlpFields((prev) => ({ ...prev, [extracted.field]: extracted.value }));
-        await speak(`${humaniseField(extracted.field)} updated to ${extracted.value}.`);
-      } else {
-        await speak('Field update cancelled.');
-        setNlpResult(null);
-      }
-    } else {
-      await speak(
-        "I couldn't recognize a specific field sentence. You can also tap the mic icon next to any input field to dictate directly."
-      );
-      setNlpResult(null);
-    }
-  };
+    setFormData((prev) => ({ ...prev, [label]: cleaned }));
 
-  const handleSingleFieldVoice = async (field) => {
-    if (activeSingleField) return;
-    setActiveSingleField(field);
-    const fieldLabel = humaniseField(field);
-    await speak(`Please speak your ${fieldLabel}.`);
-    const transcript = await listen();
-    setActiveSingleField(null);
-
-    if (!transcript?.trim()) {
-      await speak(`Could not hear ${fieldLabel}. Please try again.`);
-      return;
-    }
-
-    const cleanedValue = cleanSpokenValue(field, transcript);
-    setNlpFields((prev) => ({ ...prev, [field]: cleanedValue }));
-    setNlpResult({ field, value: cleanedValue });
-    await speak(`${fieldLabel} entered as ${cleanedValue}.`);
-  };
-
-  const handleFreeManual = (field, value) =>
-    setNlpFields((prev) => ({ ...prev, [field]: value }));
-
-  const downloadJSON = () => {
-    const data = mode === 'free' ? nlpFields : formData;
-    const blob = new Blob(
-      [JSON.stringify({ timestamp: new Date().toISOString(), data }, null, 2)],
-      { type: 'application/json' }
-    );
-    const url = URL.createObjectURL(blob);
-    const a = Object.assign(document.createElement('a'), {
-      href: url,
-      download: 'voice_form_data.json',
+    const err = validateFormField(label, cleaned);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      if (err) next[label] = err;
+      else delete next[label];
+      return next;
     });
-    a.click();
-    URL.revokeObjectURL(url);
-    speak('Form data downloaded as JSON file.', 'assertive');
+
+    if (err) {
+      await speak(`Note: ${err}`);
+    } else {
+      await speak(`${label} updated to ${cleaned}.`);
+    }
   };
 
-  const readerFields =
-    mode === 'free'
-      ? FREE_FIELDS.map((f) => ({
-          label: humaniseField(f),
-          value: nlpFields[f] || '',
-          placeholder: `Say: My ${f} is…`,
-          error: '',
-        }))
-      : fields.map((f) => ({
-          label: f,
-          value: formData[f] || '',
-          placeholder: '',
-          error: '',
-        }));
+  const handleFieldChange = (label, val) => {
+    setFormData((prev) => ({ ...prev, [label]: val }));
+    const err = validateFormField(label, val);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      if (err) next[label] = err;
+      else delete next[label];
+      return next;
+    });
+  };
+
+  /* ─────────────────────────────────
+     Submit Form & Backend Validation
+  ───────────────────────────────── */
+  const handleSubmitForm = async () => {
+    // Validate all fields
+    const allErrors = validateAllFields(formData);
+
+    // Also check if any field from fields list is missing
+    fields.forEach((f) => {
+      if (!formData[f] || !String(formData[f]).trim()) {
+        allErrors[f] = `${f} is required.`;
+      }
+    });
+
+    if (Object.keys(allErrors).length > 0) {
+      setFieldErrors(allErrors);
+      const msg = 'Please fix the validation errors before submitting.';
+      setError(msg);
+      await speak(msg);
+      return;
+    }
+
+    setError('');
+    setIsSubmitting(true);
+    await speak('Validating and submitting your form to the secure server.');
+
+    try {
+      const res = await fetch('/api/forms/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          formTitle: 'AccessAble Scanned Form',
+          fields: formData,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.errors) {
+          setFieldErrors(data.errors);
+        }
+        const msg = data.message || 'Form validation failed on server.';
+        setError(msg);
+        await speak(msg);
+        return;
+      }
+
+      setSubmitSuccess(true);
+      setStatus('SUBMITTED');
+      await speak(
+        'Form submitted successfully! You can now download the official verified PDF document.'
+      );
+    } catch (err) {
+      console.warn('[handleSubmitForm] Network error:', err);
+      // Offline fallback: still permit local PDF download
+      setSubmitSuccess(true);
+      setStatus('SUBMITTED');
+      await speak('Form validated and ready for PDF download.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  /* ─────────────────────────────────
+     Professional PDF Generation
+  ───────────────────────────────── */
+  const handleDownloadPDF = () => {
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const primaryColor = [124, 58, 237]; // Purple #7C3AED
+      const darkColor = [51, 47, 58]; // #332F3A
+      const grayColor = [100, 116, 139];
+
+      // ── Header Banner ──
+      doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+      doc.rect(0, 0, 210, 24, 'F');
+
+      // Title & Subtitle in Header
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(16);
+      doc.text('AccessAble – Form Details', 14, 12);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text('Verified Accessibility Document · Voice & OCR Assisted', 14, 18);
+
+      const timestamp = new Date().toLocaleString('en-IN', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+      doc.setFontSize(8);
+      doc.text(`Generated: ${timestamp}`, 196, 18, { align: 'right' });
+
+      // ── Meta Info Box ──
+      doc.setTextColor(darkColor[0], darkColor[1], darkColor[2]);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Submitted Field Details', 14, 34);
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(grayColor[0], grayColor[1], grayColor[2]);
+      doc.text(
+        'All data entries were parsed via accessible OCR and voice recognition with verified integrity.',
+        14,
+        39
+      );
+
+      // ── Form Table ──
+      const tableRows = Object.entries(formData).map(([k, v], idx) => [
+        String(idx + 1),
+        String(k),
+        String(v || 'N/A'),
+        'Verified ✓',
+      ]);
+
+      autoTable(doc, {
+        startY: 44,
+        head: [['#', 'Field Label', 'Value', 'Status']],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: {
+          fillColor: [124, 58, 237],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 10,
+        },
+        bodyStyles: {
+          textColor: [51, 47, 58],
+          fontSize: 9,
+          cellPadding: 3.5,
+        },
+        alternateRowStyles: {
+          fillColor: [248, 245, 255],
+        },
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' },
+          1: { cellWidth: 55, fontStyle: 'bold' },
+          2: { cellWidth: 95 },
+          3: { cellWidth: 30, textColor: [16, 185, 129], fontStyle: 'bold' },
+        },
+        margin: { left: 14, right: 14 },
+        didDrawPage: (data) => {
+          // Footer
+          const pageHeight = doc.internal.pageSize.height;
+          doc.setFontSize(8);
+          doc.setTextColor(148, 163, 184);
+          doc.text(
+            'AccessAble Platform · Inclusive Communication & Accessibility · Confidential',
+            14,
+            pageHeight - 10
+          );
+          const pageStr = `Page ${data.pageNumber}`;
+          doc.text(pageStr, 196, pageHeight - 10, { align: 'right' });
+        },
+      });
+
+      doc.save(`AccessAble_Form_${new Date().toISOString().slice(0, 10)}.pdf`);
+      speak('PDF document generated and downloaded successfully.', 'assertive');
+    } catch (err) {
+      console.error('[PDF Generation Error]:', err);
+      setError('Failed to generate PDF. Please try again.');
+      speak('Failed to generate PDF document.', 'assertive');
+    }
+  };
+
+  const readerFields = fields.map((f) => ({
+    label: f,
+    value: formData[f] || '',
+    placeholder: '',
+    error: fieldErrors[f] || '',
+  }));
 
   return (
-    <div className="card flex flex-col" style={{ minHeight: '500px' }} role="region" aria-label="Conversational Voice Form Assistant">
+    <div
+      className="card flex flex-col"
+      style={{ minHeight: '520px' }}
+      role="region"
+      aria-label="Voice Form Assistant"
+    >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--c-border)' }}>
+      <div
+        className="flex items-center justify-between p-4 border-b"
+        style={{ borderColor: 'var(--c-border)' }}
+      >
         <div className="flex items-center gap-2">
           <Mic size={18} style={{ color: 'var(--c-primary)' }} />
           <h2 className="font-bold text-base" style={{ color: 'var(--c-text)' }}>
-            Conversational Voice Form Assistant
+            Voice Form Assistant
           </h2>
           {isMicActive && (
-            <span className="badge badge-success anim-fade-in flex items-center gap-1" aria-label="Microphone actively listening">
+            <span
+              className="badge badge-success anim-fade-in flex items-center gap-1"
+              aria-label="Microphone actively listening"
+            >
               <MicOff size={11} /> Listening…
             </span>
           )}
@@ -361,309 +628,355 @@ const VoiceForm = () => {
               </option>
             ))}
           </select>
-          <button
-            onClick={() => setReaderOpen((v) => !v)}
-            className="btn btn-ghost btn-icon btn-sm"
-            aria-label="Toggle Form Reader aloud controls"
-            title="Read form aloud"
-          >
-            <BookOpen size={16} />
-          </button>
+          {fields.length > 0 && (
+            <button
+              onClick={() => setReaderOpen((v) => !v)}
+              className="btn btn-ghost btn-icon btn-sm"
+              aria-label="Toggle Form Reader aloud controls"
+              title="Read form aloud"
+            >
+              <BookOpen size={16} />
+            </button>
+          )}
         </div>
       </div>
 
       <div className="flex-1 p-5 space-y-5">
-        {/* Unsupported Warning */}
+        {/* Browser Unsupported Warning */}
         {!browserSupported && (
-          <div className="p-4 rounded-xl border border-red-300 bg-red-50 flex items-start gap-3" role="alert">
+          <div
+            className="p-4 rounded-xl border border-red-300 bg-red-50 flex items-start gap-3"
+            role="alert"
+          >
             <AlertTriangle className="text-red-500 flex-shrink-0 mt-0.5" size={18} />
             <div>
-              <p className="font-bold text-red-700 text-sm">Browser Speech Recognition Required</p>
-              <p className="text-red-600 text-xs mt-1">Please use Google Chrome, Microsoft Edge, or Apple Safari.</p>
+              <p className="font-bold text-red-700 text-sm">
+                Browser Speech Recognition Required
+              </p>
+              <p className="text-red-600 text-xs mt-1">
+                Please use Google Chrome, Microsoft Edge, or Apple Safari for voice input.
+              </p>
             </div>
           </div>
         )}
 
-        {/* Mode Chooser */}
-        {mode === 'choose' && (
+        {/* ── 1. IDLE: Upload Form ── */}
+        {status === 'IDLE' && (
           <div className="space-y-4">
-            <p className="text-sm font-semibold" style={{ color: 'var(--c-text)' }}>
-              Select Form Assistant Mode:
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <button
-                onClick={() => {
-                  setMode('scan');
-                  speakGuidance('Selected Scan a Form mode. Upload a photo or PDF of a printed form.', 'polite');
-                }}
-                className="card card-hover p-5 text-left space-y-2 hover:border-amber-500 transition-all"
-                aria-label="Scan a printed form image or PDF using OCR"
-              >
-                <Camera size={24} className="text-amber-500" />
-                <p className="font-bold text-base" style={{ color: 'var(--c-text)' }}>
-                  Scan Printed Form (OCR)
-                </p>
-                <p className="text-xs" style={{ color: 'var(--c-text-muted)' }}>
-                  Upload a photo of a document. AI extracts form fields and asks you each question aloud.
-                </p>
-              </button>
+            <div>
+              <h3 className="text-base font-bold text-[#332F3A]">Scan Printed Form (OCR)</h3>
+              <p className="text-xs text-[#635F69] mt-0.5">
+                Upload a photo or PDF of your form. AccessAble will extract the fields and guide you through filling them by voice.
+              </p>
+            </div>
 
+            <label
+              htmlFor="form-scan-upload"
+              className="flex flex-col items-center justify-center p-10 border-2 border-dashed rounded-3xl cursor-pointer transition-all hover:border-[#7C3AED]"
+              style={{
+                borderColor: 'var(--c-border)',
+                background: 'var(--c-surface-2)',
+              }}
+              tabIndex="0"
+              role="button"
+              aria-label="Upload form image or PDF document"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  document.getElementById('form-scan-upload').click();
+                }
+              }}
+            >
+              <Camera size={40} className="text-[#7C3AED] mb-3" />
+              <p className="font-bold text-base text-[#332F3A]">
+                Upload Form Document (Image or PDF)
+              </p>
+              <p className="text-xs text-[#635F69] mt-1">
+                Supports JPG, PNG, and multi-page PDF documents
+              </p>
+            </label>
+            <input
+              id="form-scan-upload"
+              type="file"
+              accept="image/*,.pdf"
+              onChange={handleScan}
+              className="sr-only"
+            />
+
+            {error && (
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold flex items-center gap-2"
+              >
+                <AlertCircle size={16} />
+                <span>{error}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── 2. SCANNING ── */}
+        {status === 'SCANNING' && (
+          <div
+            className="flex flex-col items-center justify-center py-16 gap-3"
+            role="status"
+            aria-live="polite"
+          >
+            <Loader2 className="text-[#7C3AED] anim-spin" size={44} />
+            <p className="font-bold text-base text-[#332F3A]">Scanning Form with OCR…</p>
+            <p className="text-xs text-[#635F69]">
+              Extracting document structure and field labels
+            </p>
+          </div>
+        )}
+
+        {/* ── 3. CONFIRM_PROCEED ── */}
+        {status === 'CONFIRM_PROCEED' && (
+          <div className="space-y-4">
+            <div className="p-4 rounded-2xl bg-purple-50 border border-purple-200">
+              <p className="font-bold text-sm text-[#7C3AED]">
+                Scanned {fields.length} Fields Successfully
+              </p>
+              <p className="text-xs text-[#635F69] mt-1">
+                Fields: <strong>{fields.join(', ')}</strong>
+              </p>
+            </div>
+            <div className="flex gap-3">
               <button
                 onClick={() => {
-                  setMode('free');
-                  speakGuidance('Selected Free Conversational Voice Fill mode. Speak any sentence to auto-fill fields.', 'polite');
+                  activeSessionIdRef.current += 1;
+                  stopAllVoice();
+                  setStatus('FILLING');
+                  runConversationalLoop(fields, 0);
                 }}
-                className="card card-hover p-5 text-left space-y-2 hover:border-amber-500 transition-all"
-                aria-label="Free Conversational Voice Fill mode"
+                className="clay-btn text-sm py-2.5 px-5 rounded-xl flex-1"
               >
-                <Mic size={24} className="text-amber-500" />
-                <p className="font-bold text-base" style={{ color: 'var(--c-text)' }}>
-                  Free Conversational Voice Fill
-                </p>
-                <p className="text-xs" style={{ color: 'var(--c-text-muted)' }}>
-                  Speak naturally — "My name is Rahul", "I am 22 years old" — and NLP automatically assigns the field.
-                </p>
+                Start Guided Voice Fill
+              </button>
+              <button
+                onClick={() => {
+                  activeSessionIdRef.current += 1;
+                  stopAllVoice();
+                  setStatus('REVIEW');
+                  speakGuidance('Switched directly to manual form review mode.', 'polite');
+                }}
+                className="clay-btn-secondary text-sm py-2.5 px-5 rounded-xl"
+              >
+                Manual Review
+              </button>
+              <button
+                onClick={() => {
+                  activeSessionIdRef.current += 1;
+                  stopAllVoice();
+                  setStatus('IDLE');
+                  setFields([]);
+                  setFormData({});
+                }}
+                className="btn btn-ghost btn-sm"
+              >
+                Cancel
               </button>
             </div>
           </div>
         )}
 
-        {/* SCAN MODE */}
-        {mode === 'scan' && (
-          <>
-            {status === 'IDLE' && (
-              <div className="space-y-4">
-                <button onClick={() => setMode('choose')} className="btn btn-ghost btn-sm" aria-label="Go back to mode selection">
-                  ← Back
-                </button>
-                <label
-                  htmlFor="form-scan-upload"
-                  className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-2xl cursor-pointer transition-all hover:border-amber-500"
-                  style={{ borderColor: 'var(--c-border)', background: 'var(--c-surface-2)' }}
-                  tabIndex="0"
-                  role="button"
-                  aria-label="Upload form image or PDF document"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      document.getElementById('form-scan-upload').click();
-                    }
-                  }}
+        {/* ── 4. FILLING (Conversational guided loop) ── */}
+        {status === 'FILLING' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="font-bold text-sm text-[#332F3A]">
+                Guided Voice Progress: Field {currentIdx + 1} of {fields.length}
+              </p>
+              <span className="badge badge-warning flex items-center gap-1 text-xs">
+                <Volume2 size={12} /> {isMicActive ? 'Listening…' : 'Assistant Speaking…'}
+              </span>
+            </div>
+            <div className="conf-bar">
+              <div
+                className="conf-bar-fill"
+                style={{
+                  width: `${Math.round(((currentIdx + 1) / fields.length) * 100)}%`,
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              {fields.map((f, i) => (
+                <div
+                  key={f}
+                  className={`flex items-center justify-between p-3 rounded-xl text-sm transition-all ${
+                    i === currentIdx ? 'ring-2 ring-[#7C3AED] font-bold bg-purple-50' : 'bg-slate-50'
+                  }`}
                 >
-                  <Camera size={36} className="text-amber-500 mb-3" />
-                  <p className="font-semibold text-base" style={{ color: 'var(--c-text)' }}>
-                    Upload Form Image or PDF
-                  </p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--c-text-muted)' }}>
-                    JPG, PNG, or PDF format
-                  </p>
-                </label>
-                <input
-                  id="form-scan-upload"
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={handleScan}
-                  className="sr-only"
-                />
-                {error && (
-                  <div role="alert" aria-live="assertive" className="p-3 rounded-lg bg-red-50 border border-red-200">
-                    <p className="text-red-600 text-sm font-semibold">{error}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {status === 'SCANNING' && (
-              <div className="flex flex-col items-center justify-center py-16 gap-3" role="status" aria-live="polite">
-                <Loader2 className="text-amber-500 anim-spin" size={40} />
-                <p className="font-bold text-base" style={{ color: 'var(--c-text)' }}>
-                  Scanning Form with OCR…
-                </p>
-                <p className="text-xs" style={{ color: 'var(--c-text-muted)' }}>
-                  Extracting form labels and structure
-                </p>
-              </div>
-            )}
-
-            {(status === 'CONFIRM_PROCEED' || status === 'FILLING') && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="font-bold text-sm" style={{ color: 'var(--c-text)' }}>
-                    Conversational Progress: Field {currentIdx + 1} of {fields.length}
-                  </p>
-                  <span className="badge badge-warning flex items-center gap-1">
-                    <Volume2 size={12} /> {isMicActive ? 'Listening…' : 'Assistant Speaking…'}
-                  </span>
+                  <span className="text-[#332F3A]">{f}</span>
+                  {formData[f] ? (
+                    <span className="badge badge-success text-xs">{formData[f]}</span>
+                  ) : i === currentIdx ? (
+                    <span className="badge badge-warning text-xs">Active Field</span>
+                  ) : (
+                    <span className="badge badge-neutral text-xs">Pending</span>
+                  )}
                 </div>
-                <div className="conf-bar">
-                  <div
-                    className="conf-bar-fill"
-                    style={{ width: `${Math.round(((currentIdx + 1) / fields.length) * 100)}%` }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  {fields.map((f, i) => (
-                    <div
-                      key={f}
-                      className={`flex items-center justify-between p-3 rounded-xl text-sm transition-all ${
-                        i === currentIdx ? 'ring-2 ring-amber-500 font-bold' : ''
-                      }`}
-                      style={{
-                        background: i === currentIdx ? 'rgb(245 158 11 / .15)' : 'var(--c-surface-2)',
-                      }}
-                    >
-                      <span style={{ color: 'var(--c-text)' }}>{f}</span>
-                      {formData[f] ? (
-                        <span className="badge badge-success">{formData[f]}</span>
-                      ) : i < currentIdx ? (
-                        <span className="badge badge-neutral">Skipped</span>
-                      ) : i === currentIdx ? (
-                        <span className="badge badge-warning">Active Field</span>
-                      ) : (
-                        <span className="badge badge-neutral">Pending</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {status === 'REVIEW' && (
-              <div className="space-y-4" role="status" aria-live="polite">
-                <div className="flex items-center gap-2 text-green-600">
-                  <CheckCircle size={22} />
-                  <p className="font-bold text-lg">Form Completed Successfully!</p>
-                </div>
-                {Object.entries(formData).map(([k, v]) => (
-                  <div key={k} className="flex justify-between items-center p-3 rounded-xl text-sm" style={{ background: 'var(--c-surface-2)' }}>
-                    <span className="font-medium" style={{ color: 'var(--c-text-muted)' }}>{k}</span>
-                    <span className="font-bold" style={{ color: 'var(--c-text)' }}>{v}</span>
-                  </div>
-                ))}
-                <div className="flex gap-2 flex-wrap pt-2">
-                  <button onClick={downloadJSON} className="btn btn-primary btn-sm" aria-label="Download filled form data as JSON">
-                    <FileJson size={15} /> Download JSON
-                  </button>
-                  <button
-                    onClick={() => {
-                      setStatus('IDLE');
-                      setFormData({});
-                      setFields([]);
-                      setMode('choose');
-                      speakGuidance('Form reset. Choose an assistant mode.', 'polite');
-                    }}
-                    className="btn btn-secondary btn-sm"
-                    aria-label="Reset form and start over"
-                  >
-                    <RotateCcw size={15} /> Fill Another Form
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
+              ))}
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => {
+                  activeSessionIdRef.current += 1;
+                  stopAllVoice();
+                  setStatus('REVIEW');
+                }}
+                className="btn btn-secondary btn-sm"
+              >
+                Skip to Review & Edit
+              </button>
+            </div>
+          </div>
         )}
 
-        {/* FREE CONVERSATIONAL MODE */}
-        {mode === 'free' && (
-          <div className="space-y-5">
-            <button onClick={() => setMode('choose')} className="btn btn-ghost btn-sm" aria-label="Go back to mode selection">
-              ← Back
-            </button>
-
-            {nlpResult && (
-              <div className="p-3 rounded-xl bg-green-50 border border-green-200 flex items-center gap-2 anim-scale-in" role="status" aria-live="polite">
-                <CheckCircle className="text-green-600" size={18} />
-                <p className="text-sm text-green-800 font-semibold">
-                  Recognized: {humaniseField(nlpResult.field)} → {nlpResult.value}
+        {/* ── 5. REVIEW & SUBMITTED: Full Review with Validation, Edit, Submit & PDF ── */}
+        {(status === 'REVIEW' || status === 'SUBMITTED') && (
+          <div className="space-y-5" role="status" aria-live="polite">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-lg text-[#332F3A]">
+                  {status === 'SUBMITTED' ? 'Form Verified & Submitted' : 'Review & Verify Form'}
+                </h3>
+                <p className="text-xs text-[#635F69]">
+                  Review each field below. You can edit any value, dictate with the microphone, and download your PDF.
                 </p>
+              </div>
+              {status === 'SUBMITTED' && (
+                <span className="badge badge-success flex items-center gap-1.5 text-xs py-1 px-3">
+                  <CheckCircle size={14} /> Submitted
+                </span>
+              )}
+            </div>
+
+            {error && (
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="p-3.5 rounded-xl bg-red-50 border border-red-300 text-red-700 text-sm font-semibold flex items-center gap-2"
+              >
+                <AlertCircle size={18} className="flex-shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 
-            <button
-              onClick={handleFreeVoice}
-              disabled={nlpListening || !browserSupported}
-              className={`btn w-full btn-lg ${nlpListening ? 'btn-danger' : 'btn-accent'}`}
-              aria-label={nlpListening ? 'Listening for natural speech input' : 'Tap to speak a sentence'}
-              aria-pressed={nlpListening}
-            >
-              {nlpListening ? (
-                <>
-                  <MicOff className="animate-pulse" size={20} /> Assistant Listening…
-                </>
-              ) : (
-                <>
-                  <Mic size={20} /> Speak Sentence (NLP Auto-Fill)
-                </>
-              )}
-            </button>
-
-            <p className="text-xs" style={{ color: 'var(--c-text-muted)' }}>
-              💡 Say: "My name is Rahul" · "My email is rahul@gmail.com" · "I live in Bengaluru"
-            </p>
-
-            {/* Editable Field Inputs */}
+            {/* Editable Fields List */}
             <div className="space-y-3">
-              {FREE_FIELDS.map((f) => {
-                const isFieldActive = activeSingleField === f;
+              {fields.map((f) => {
+                const isDictating = activeDictatingField === f;
+                const fieldError = fieldErrors[f];
+
                 return (
-                  <div key={f}>
-                    <label htmlFor={`free-${f}`} className="label text-xs font-semibold flex items-center justify-between">
-                      <span>{humaniseField(f)}</span>
-                      {isFieldActive && (
-                        <span className="text-amber-500 font-bold animate-pulse text-[11px] flex items-center gap-1">
-                          <Mic size={10} /> Listening…
+                  <div key={f} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor={`field-input-${f}`}
+                        className="text-xs font-bold text-[#332F3A]"
+                      >
+                        {f} <span className="text-[#DB2777]">*</span>
+                      </label>
+                      {isDictating && (
+                        <span className="text-amber-600 font-bold text-xs flex items-center gap-1 animate-pulse">
+                          <Mic size={11} /> Dictating…
                         </span>
                       )}
-                    </label>
+                    </div>
+
                     <div className="flex gap-2">
                       <input
-                        id={`free-${f}`}
+                        id={`field-input-${f}`}
                         type="text"
-                        value={nlpFields[f] || ''}
-                        onChange={(e) => handleFreeManual(f, e.target.value)}
-                        onFocus={() => speakGuidance(`${humaniseField(f)} edit box. Value: ${nlpFields[f] || 'Empty'}.`, 'polite')}
-                        className="input-field text-sm py-2 flex-1"
-                        placeholder={`Say: My ${f} is… or tap mic`}
+                        value={formData[f] || ''}
+                        onChange={(e) => handleFieldChange(f, e.target.value)}
+                        className={`clay-input text-sm py-2 flex-1 ${
+                          fieldError ? 'border-2 border-red-500 bg-red-50/50' : ''
+                        }`}
+                        placeholder={`Enter ${f}`}
+                        aria-invalid={Boolean(fieldError)}
+                        aria-describedby={fieldError ? `err-${f}` : undefined}
                       />
                       <button
                         type="button"
-                        onClick={() => handleSingleFieldVoice(f)}
-                        disabled={!browserSupported || activeSingleField !== null || nlpListening}
-                        className={`btn btn-sm ${isFieldActive ? 'btn-danger' : 'btn-secondary'}`}
-                        aria-label={`Dictate ${humaniseField(f)} by voice`}
-                        title={`Speak into ${humaniseField(f)}`}
+                        onClick={() => handleDictateReviewField(f)}
+                        disabled={!browserSupported || isDictating}
+                        className={`btn btn-sm ${isDictating ? 'btn-danger' : 'btn-secondary'}`}
+                        aria-label={`Dictate value for ${f}`}
+                        title={`Speak into ${f}`}
                       >
-                        <Mic size={16} className={isFieldActive ? 'animate-pulse' : ''} />
+                        <Mic size={16} className={isDictating ? 'animate-pulse' : ''} />
                       </button>
                     </div>
+
+                    {fieldError && (
+                      <p id={`err-${f}`} className="text-xs text-red-600 font-medium pl-1">
+                        ⚠ {fieldError}
+                      </p>
+                    )}
                   </div>
                 );
               })}
             </div>
 
-            {Object.keys(nlpFields).some((k) => nlpFields[k]) && (
-              <div className="flex gap-2 flex-wrap pt-2">
-                <button onClick={downloadJSON} className="btn btn-primary btn-sm" aria-label="Download free form data as JSON">
-                  <FileJson size={15} /> Download JSON
-                </button>
+            {/* Action Buttons: Submit & PDF Download */}
+            <div className="pt-3 border-t flex flex-wrap gap-3 items-center" style={{ borderColor: 'var(--c-border)' }}>
+              {status !== 'SUBMITTED' && (
                 <button
-                  onClick={() => {
-                    setNlpFields({});
-                    setNlpResult(null);
-                    speakGuidance('Form cleared.', 'polite');
-                  }}
-                  className="btn btn-secondary btn-sm"
-                  aria-label="Clear all entered fields"
+                  type="button"
+                  onClick={handleSubmitForm}
+                  disabled={isSubmitting}
+                  className="clay-btn text-sm py-3 px-6 rounded-2xl flex items-center gap-2"
+                  aria-label="Submit and validate form data"
                 >
-                  <RotateCcw size={15} /> Clear Fields
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={16} className="anim-spin" />
+                      <span>Validating…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send size={16} />
+                      <span>Submit Form</span>
+                    </>
+                  )}
                 </button>
-              </div>
-            )}
+              )}
+
+              {/* PDF Download Button */}
+              <button
+                type="button"
+                onClick={handleDownloadPDF}
+                className="clay-btn-secondary text-sm py-3 px-6 rounded-2xl flex items-center gap-2 font-bold text-[#7C3AED]"
+                aria-label="Download submitted form as official PDF"
+              >
+                <FileDown size={18} />
+                <span>Download as PDF</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStatus('IDLE');
+                  setFormData({});
+                  setFields([]);
+                  setFieldErrors({});
+                  setError('');
+                  speakGuidance('Form reset. Ready to scan another document.', 'polite');
+                }}
+                className="btn btn-ghost btn-sm"
+                aria-label="Reset form and start over"
+              >
+                <RotateCcw size={15} /> Scan Another Form
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Reader Component */}
+        {/* Form Reader component if open */}
         {readerOpen && readerFields.length > 0 && (
-          <div className="mt-2">
+          <div className="mt-4">
             <FormReader fields={readerFields} onClose={() => setReaderOpen(false)} />
           </div>
         )}

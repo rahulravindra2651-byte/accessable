@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Eye, Mic, Camera, FileText, Languages,
-  Shield, Heart, ChevronDown, ChevronUp, ArrowRight,
+  Heart, ChevronDown, ChevronUp, ArrowRight,
   Sparkles, CheckCircle2, Zap, Star
 } from 'lucide-react';
 
@@ -131,9 +131,9 @@ const FEATURES = [
   {
     icon: Mic,
     title: 'Voice Form Filling',
-    desc: 'Speak naturally — "My name is Rahul" — and the engine automatically extracts and populates complex bank & government forms.',
+    desc: 'Upload a printed form via OCR. AccessAble extracts fields and lets you fill them by voice or keyboard, then validates and downloads your PDF.',
     gradient: 'from-pink-400 to-pink-600',
-    badge: 'NLP Engine',
+    badge: 'OCR & Voice',
   },
   {
     icon: Eye,
@@ -155,13 +155,6 @@ const FEATURES = [
     desc: 'Built-in support for English, Hindi, Kannada, Tamil, Telugu, Malayalam, Marathi, Bengali, Gujarati, and Punjabi.',
     gradient: 'from-amber-400 to-amber-600',
     badge: 'Multilingual',
-  },
-  {
-    icon: Shield,
-    title: 'Emergency SOS Alert',
-    desc: 'One-tap emergency distress signal broadcasting live GPS coordinates via SMS with tactile haptic vibration alerts.',
-    gradient: 'from-rose-400 to-rose-600',
-    badge: 'GPS Distress',
   },
 ];
 
@@ -314,7 +307,7 @@ const LandingPage = ({ onGetStarted, onLogin }) => {
         {/* Subtitle */}
         <p className="clay-font-body text-xl sm:text-2xl text-[#635F69] max-w-2xl mx-auto mb-10 leading-relaxed font-medium">
           AccessAble brings tangible, multi-modal assistive intelligence to everyone — bridging sign language,
-          conversational voice forms, and real-time dialogue.
+          OCR voice form filling, and real-time dialogue transcription.
         </p>
 
         {/* CTA Buttons */}

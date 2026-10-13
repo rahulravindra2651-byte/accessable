@@ -5,10 +5,11 @@
   "main": "backend/server.js",
   "scripts": {
     "install:all": "npm install --legacy-peer-deps && cd backend && npm install",
-    "build": "CI=false react-scripts build",
+    "build": "react-scripts build",
     "start": "node backend/server.js",
     "dev:backend": "cd backend && npm start",
-    "dev:frontend": "react-scripts start"
+    "dev:frontend": "react-scripts start",
+    "test": "react-scripts test --watchAll=false --passWithNoTests"
   },
   "dependencies": {
     "@mediapipe/camera_utils": "latest",
@@ -21,6 +22,8 @@
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
     "autoprefixer": "^10.4.16",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.474.0",
     "pdfjs-dist": "^3.11.174",
     "postcss": "^8.4.32",

@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import { detectConfirmationIntent } from '../utils/nlpExtractor';
+
+// Active recognition instance tracker across all calls
+let activeRecognitionInstance = null;
 
 /**
  * Returns a promise that resolves with the best available voice for the given language.
@@ -87,7 +91,7 @@ export const useAssistant = (language = 'en-US') => {
           activeUtterances.delete(utterance);
           clearTimeout(fallbackTimer);
           clearTimeout(startWatchdog);
-          setTimeout(resolve, 200);
+          setTimeout(resolve, 80);
         }
       };
 
@@ -123,6 +127,21 @@ export const useAssistant = (language = 'en-US') => {
     });
   };
 
+  const stopAllVoice = () => {
+    if (typeof window !== 'undefined') {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (activeRecognitionInstance) {
+        try {
+          activeRecognitionInstance.abort();
+        } catch (e) {}
+        activeRecognitionInstance = null;
+      }
+      setIsMicActive(false);
+    }
+  };
+
   const listen = () => {
     return new Promise((resolve) => {
       if (typeof window === 'undefined') {
@@ -136,7 +155,15 @@ export const useAssistant = (language = 'en-US') => {
         return resolve('');
       }
 
-      // Stop speech synthesis if currently speaking
+      // 1. Immediately abort any existing recognition session to avoid duplicate listeners or busy hardware
+      if (activeRecognitionInstance) {
+        try {
+          activeRecognitionInstance.abort();
+        } catch (e) {}
+        activeRecognitionInstance = null;
+      }
+
+      // 2. Stop speech synthesis if currently speaking
       if ('speechSynthesis' in window && window.speechSynthesis.speaking) {
         window.speechSynthesis.cancel();
       }
@@ -144,78 +171,100 @@ export const useAssistant = (language = 'en-US') => {
       setIsMicActive(true);
 
       const recognition = new SpeechRecognition();
+      activeRecognitionInstance = recognition;
       recognition.lang = language;
       recognition.continuous = false;
       recognition.interimResults = true;
 
       let resolved = false;
-      let capturedText = '';
+      let capturedFinal = '';
+      let capturedInterim = '';
 
       const safeResolve = (value) => {
         if (!resolved) {
           resolved = true;
           clearTimeout(timeoutId);
           setIsMicActive(false);
-          resolve(value);
+          if (activeRecognitionInstance === recognition) {
+            activeRecognitionInstance = null;
+          }
+          try {
+            recognition.abort();
+          } catch (e) {}
+          resolve((value || '').trim());
         }
       };
 
       const timeoutId = setTimeout(() => {
         if (!resolved) {
           console.warn('[useAssistant] Voice input timed out after 12s');
-          try { recognition.stop(); } catch (e) {}
-          safeResolve(capturedText);
+          safeResolve(capturedFinal || capturedInterim || '');
         }
       }, 12000);
 
       recognition.onstart = () => {
         setIsMicActive(true);
-        console.log('[useAssistant] Microphone is NOW RECORDING...');
       };
 
       recognition.onresult = (e) => {
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const transcriptPart = e.results[i][0]?.transcript || '';
+        let finalStr = '';
+        let interimStr = '';
+
+        for (let i = 0; i < e.results.length; i++) {
+          const part = e.results[i][0]?.transcript || '';
           if (e.results[i].isFinal) {
-            capturedText = transcriptPart.trim().toLowerCase();
-          } else if (!capturedText) {
-            capturedText = transcriptPart.trim().toLowerCase();
+            finalStr += (finalStr ? ' ' : '') + part;
+          } else {
+            interimStr += (interimStr ? ' ' : '') + part;
           }
         }
-        console.log('[useAssistant] Voice Input Received:', capturedText);
-        if (capturedText && e.results[e.results.length - 1].isFinal) {
-          safeResolve(capturedText);
+
+        const candidate = (finalStr || interimStr).trim();
+        if (finalStr.trim()) {
+          capturedFinal = finalStr.trim();
+        }
+        if (interimStr.trim()) {
+          capturedInterim = interimStr.trim();
+        }
+
+        // A. If a final result is available, resolve immediately!
+        if (finalStr.trim()) {
+          safeResolve(finalStr.trim());
+          return;
+        }
+
+        // B. If an interim result clearly matches an affirmative or negative confirmation intent (e.g. "yes", "no"),
+        // resolve immediately so the user NEVER has to say "Yes" twice or wait for silence timeouts!
+        if (candidate) {
+          const quickIntent = detectConfirmationIntent(candidate);
+          if (quickIntent === 'AFFIRMATIVE' || quickIntent === 'NEGATIVE') {
+            safeResolve(candidate);
+            return;
+          }
         }
       };
 
       recognition.onerror = (err) => {
-        if (err.error === 'not-allowed') {
-          console.error('[useAssistant] Microphone permission denied. Please allow microphone access.');
-        } else if (err.error === 'no-speech') {
-          console.warn('[useAssistant] No speech detected.');
-        } else if (err.error === 'network') {
-          console.warn('[useAssistant] Speech recognition network error (Google Speech cloud service unavailable or offline).');
-        } else {
-          console.error('[useAssistant] Speech Error:', err.error);
+        if (err.error !== 'no-speech' && err.error !== 'aborted') {
+          console.warn('[useAssistant] Speech Error:', err.error);
         }
-        safeResolve(capturedText);
+        safeResolve(capturedFinal || capturedInterim || '');
       };
 
       recognition.onend = () => {
         if (!resolved) {
-          console.log('[useAssistant] Recognition ended.', capturedText ? `Captured: ${capturedText}` : 'no result.');
-          safeResolve(capturedText);
+          safeResolve(capturedFinal || capturedInterim || '');
         }
       };
 
       try {
         recognition.start();
       } catch (startErr) {
-        console.error('[useAssistant] Recognition start failed:', startErr);
+        console.warn('[useAssistant] Recognition start exception:', startErr);
         safeResolve('');
       }
     });
   };
 
-  return { speak, listen, isMicActive };
+  return { speak, listen, stopAllVoice, isMicActive };
 };
